@@ -415,8 +415,7 @@ input,
 }
 
 .plain-button,
-.close-button,
-.secret-button {
+.close-button {
   border: 1px solid var(--white);
   border-radius: 0;
   padding: 8px 12px;
@@ -424,21 +423,22 @@ input,
   background: var(--black);
 }
 
-.secret-prompt {
-  display: grid;
-  gap: 12px;
-}
-
-.secret-button {
+.secret-prompt-box {
   width: 100%;
-  min-height: 44px;
+  min-height: 160px;
+  border: 1px solid var(--white);
+  border-radius: 0;
+  padding: 10px;
+  color: var(--white);
+  background: var(--black);
   text-align: left;
+  font: inherit;
 }
 
-.secret-button:hover {
-  text-decoration: none;
-  background: var(--white);
-  color: var(--black);
+.secret-prompt-box.is-warning {
+  color: #ff2d2d;
+  font-weight: 700;
+  border-color: #ff2d2d;
 }
 
 @media (max-width: 640px) {

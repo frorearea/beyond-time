@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>时间之外</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=secret-prompt" />
   </head>
   <body>
     <button class="music-button" id="musicButton" type="button" aria-pressed="false">音乐</button>
@@ -75,15 +75,13 @@
             <input id="modelInput" type="text" />
           </label>
 
-          <div class="secret-prompt" id="secretPrompt">
-            <button class="secret-button" id="revealPromptButton" type="button" aria-expanded="false">
+          <label>
+            人设 Prompt
+            <button class="secret-prompt-box" id="secretPromptButton" type="button">
               不准偷窥魔女的秘密
             </button>
-            <label class="persona-field" id="personaField" hidden>
-              人设 Prompt
-              <textarea id="personaInput" rows="10" placeholder="把你写好的魔女人设放在这里..."></textarea>
-            </label>
-          </div>
+            <textarea id="personaInput" rows="10" hidden></textarea>
+          </label>
 
           <div class="settings-actions">
             <button class="plain-button" id="resetSettingsButton" type="button">重置</button>
@@ -93,6 +91,6 @@
       </div>
     </aside>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=secret-prompt"></script>
   </body>
 </html>
