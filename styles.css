@@ -415,12 +415,30 @@ input,
 }
 
 .plain-button,
-.close-button {
+.close-button,
+.secret-button {
   border: 1px solid var(--white);
   border-radius: 0;
   padding: 8px 12px;
   color: var(--white);
   background: var(--black);
+}
+
+.secret-prompt {
+  display: grid;
+  gap: 12px;
+}
+
+.secret-button {
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+}
+
+.secret-button:hover {
+  text-decoration: none;
+  background: var(--white);
+  color: var(--black);
 }
 
 @media (max-width: 640px) {

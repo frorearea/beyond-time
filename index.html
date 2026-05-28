@@ -75,10 +75,15 @@
             <input id="modelInput" type="text" />
           </label>
 
-          <label>
-            人设 Prompt
-            <textarea id="personaInput" rows="10" placeholder="把你写好的魔女人设放在这里..."></textarea>
-          </label>
+          <div class="secret-prompt" id="secretPrompt">
+            <button class="secret-button" id="revealPromptButton" type="button" aria-expanded="false">
+              不准偷窥魔女的秘密
+            </button>
+            <label class="persona-field" id="personaField" hidden>
+              人设 Prompt
+              <textarea id="personaInput" rows="10" placeholder="把你写好的魔女人设放在这里..."></textarea>
+            </label>
+          </div>
 
           <div class="settings-actions">
             <button class="plain-button" id="resetSettingsButton" type="button">重置</button>

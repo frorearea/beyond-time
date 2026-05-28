@@ -82,6 +82,8 @@ const elements = {
   settingsDrawer: document.querySelector("#settingsDrawer"),
   settingsForm: document.querySelector("#settingsForm"),
   resetSettingsButton: document.querySelector("#resetSettingsButton"),
+  revealPromptButton: document.querySelector("#revealPromptButton"),
+  personaField: document.querySelector("#personaField"),
   apiKeyInput: document.querySelector("#apiKeyInput"),
   apiUrlInput: document.querySelector("#apiUrlInput"),
   modelInput: document.querySelector("#modelInput"),
@@ -142,6 +144,7 @@ function init() {
   elements.settingsDrawer.addEventListener("click", handleDrawerClick);
   elements.settingsForm.addEventListener("submit", saveSettings);
   elements.resetSettingsButton.addEventListener("click", resetSettings);
+  elements.revealPromptButton.addEventListener("click", revealPrompt);
   elements.messageInput.addEventListener("keydown", handleComposerKeys);
 }
 
@@ -774,6 +777,13 @@ function resetSettings() {
   };
   saveSettingsToStorage();
   syncSettingsForm();
+}
+
+function revealPrompt() {
+  const shouldShow = elements.personaField.hidden;
+  elements.personaField.hidden = !shouldShow;
+  elements.revealPromptButton.setAttribute("aria-expanded", String(shouldShow));
+  elements.revealPromptButton.textContent = shouldShow ? "收起魔女的秘密" : "不准偷窥魔女的秘密";
 }
 
 function handleComposerKeys(event) {
