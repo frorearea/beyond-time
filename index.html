@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>时间之外</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <button class="music-button" id="musicButton" type="button" aria-pressed="false">音乐</button>
+    <button class="settings-button" id="settingsButton" type="button">设置</button>
+
+    <main class="room" aria-label="时间之外">
+      <div class="sky-lines" aria-hidden="true">
+        <span class="moon"></span>
+        <span class="star star-a"></span>
+        <span class="star star-b"></span>
+        <span class="star star-c"></span>
+        <span class="star star-d"></span>
+      </div>
+
+      <img class="witch-image" src="reference-princess.jpg" alt="普瑞赛斯参考形象" />
+
+      <section class="dialogue-box" aria-label="对话框">
+        <div class="coffee-cup" aria-hidden="true">
+          <span class="steam steam-a"></span>
+          <span class="steam steam-b"></span>
+          <span class="steam steam-c"></span>
+          <span class="cup-body"></span>
+          <span class="cup-handle"></span>
+          <span class="cup-saucer"></span>
+        </div>
+        <div class="messages" id="messages">
+          <article class="message message-witch">
+            <p>进来吧。这里暂时只有黑暗、我、还有你可以慢慢放下的声音。</p>
+          </article>
+        </div>
+
+        <div class="quick-options" id="quickOptions" aria-label="心声选项"></div>
+
+        <form class="composer" id="chatForm">
+          <textarea
+            id="messageInput"
+            name="message"
+            rows="1"
+            placeholder="说点什么..."
+            autocomplete="off"
+          ></textarea>
+          <button class="send-button" id="sendButton" type="submit">发送</button>
+          <button class="clear-button" id="clearButton" type="button">清空</button>
+        </form>
+      </section>
+    </main>
+
+    <aside class="settings-drawer" id="settingsDrawer" aria-hidden="true">
+      <div class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <div class="settings-head">
+          <h2 id="settingsTitle">设置</h2>
+          <button class="close-button" id="closeSettingsButton" type="button" aria-label="关闭设置">关闭</button>
+        </div>
+
+        <form class="settings-form" id="settingsForm">
+          <label>
+            API Key
+            <input id="apiKeyInput" type="password" placeholder="sk-..." autocomplete="off" />
+          </label>
+
+          <label>
+            API 地址
+            <input id="apiUrlInput" type="url" />
+          </label>
+
+          <label>
+            模型
+            <input id="modelInput" type="text" />
+          </label>
+
+          <label>
+            人设 Prompt
+            <textarea id="personaInput" rows="10" placeholder="把你写好的魔女人设放在这里..."></textarea>
+          </label>
+
+          <div class="settings-actions">
+            <button class="plain-button" id="resetSettingsButton" type="button">重置</button>
+            <button class="plain-button" type="submit">保存</button>
+          </div>
+        </form>
+      </div>
+    </aside>
+
+    <script src="app.js"></script>
+  </body>
+</html>
