@@ -2,6 +2,8 @@
   color-scheme: dark;
   --black: #000;
   --white: #fff;
+  --stage-max-width: 1040px;
+  --stage-max-height: 1000px;
 }
 
 * {
@@ -10,6 +12,7 @@
 
 html,
 body {
+  width: 100%;
   min-height: 100%;
 }
 
@@ -18,6 +21,8 @@ body {
   overflow: hidden;
   background: var(--black);
   color: var(--white);
+  display: grid;
+  place-items: center;
   font-family:
     "Microsoft YaHei",
     "PingFang SC",
@@ -36,9 +41,10 @@ button {
 }
 
 .settings-button,
-.music-button {
+.music-button,
+.music-mode-button {
   position: fixed;
-  top: 18px;
+  top: calc((100vh - min(100vh, var(--stage-max-height))) / 2 + 18px);
   z-index: 10;
   border: 0;
   padding: 0;
@@ -49,15 +55,20 @@ button {
 }
 
 .settings-button {
-  right: 22px;
+  right: calc((100vw - min(100vw, var(--stage-max-width))) / 2 + 22px);
 }
 
 .music-button {
-  left: 22px;
+  left: calc((100vw - min(100vw, var(--stage-max-width))) / 2 + 22px);
+}
+
+.music-mode-button {
+  left: calc((100vw - min(100vw, var(--stage-max-width))) / 2 + 70px);
 }
 
 .settings-button:hover,
 .music-button:hover,
+.music-mode-button:hover,
 .send-button:hover,
 .clear-button:hover,
 .plain-button:hover,
@@ -67,10 +78,10 @@ button {
 
 .room {
   position: relative;
-  width: 100vw;
-  height: 100vh;
+  width: min(100vw, var(--stage-max-width));
+  height: min(100vh, var(--stage-max-height));
   display: grid;
-  grid-template-rows: minmax(0, 1fr) minmax(300px, 42vh);
+  grid-template-rows: minmax(0, 1fr) minmax(300px, 42%);
   align-items: end;
   justify-items: center;
   padding: 28px 22px 24px;
@@ -79,7 +90,7 @@ button {
 
 .sky-lines {
   position: absolute;
-  inset: 52px 0 44vh;
+  inset: 52px 0 44%;
   z-index: 0;
   pointer-events: none;
 }
@@ -93,10 +104,10 @@ button {
 
 .moon {
   top: 8%;
-  left: max(28px, calc(50vw - 560px));
+  left: 34px;
   width: 74px;
   height: 74px;
-  border: 1px solid var(--white);
+  border: 2px solid var(--white);
   border-radius: 50%;
 }
 
@@ -122,7 +133,7 @@ button {
   position: absolute;
   left: 50%;
   top: 0;
-  width: 1px;
+  width: 2px;
   height: 100%;
   background: var(--white);
   transform: translateX(-50%);
@@ -134,33 +145,57 @@ button {
 
 .star-a {
   top: 14%;
-  right: max(38px, calc(50vw - 560px));
+  right: 42px;
 }
 
 .star-b {
   top: 34%;
-  left: max(90px, calc(50vw - 430px));
+  left: 120px;
   transform: scale(0.62) rotate(45deg);
 }
 
 .star-c {
   top: 46%;
-  right: max(112px, calc(50vw - 430px));
+  right: 118px;
   transform: scale(0.82);
 }
 
 .star-d {
   top: 10%;
-  left: max(42px, calc(50vw - 300px));
+  left: 290px;
   transform: scale(0.48) rotate(45deg);
+}
+
+.star-e {
+  top: 24%;
+  left: 210px;
+  transform: scale(0.42);
+}
+
+.star-f {
+  top: 30%;
+  right: 242px;
+  transform: scale(0.36) rotate(45deg);
+}
+
+.star-g {
+  top: 58%;
+  left: 64px;
+  transform: scale(0.52) rotate(45deg);
+}
+
+.star-h {
+  top: 62%;
+  right: 66px;
+  transform: scale(0.44);
 }
 
 .witch-image {
   position: relative;
   z-index: 1;
   width: auto;
-  max-width: min(88vw, 760px);
-  max-height: min(62vh, calc(100vh - 350px));
+  max-width: min(88%, 760px);
+  max-height: min(100%, 620px);
   object-fit: contain;
   object-position: center;
   display: block;
@@ -169,13 +204,79 @@ button {
 .dialogue-box {
   position: relative;
   z-index: 2;
-  width: min(1240px, calc(100vw - 44px));
+  width: min(920px, 100%);
   height: 100%;
   min-height: 300px;
   border: 1px solid var(--white);
   background: var(--black);
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.writing-indicator {
+  position: absolute;
+  top: -42px;
+  right: 18px;
+  z-index: 3;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  width: 76px;
+  height: 30px;
+  background: var(--black);
+  pointer-events: none;
+}
+
+.dialogue-box.is-thinking .writing-indicator {
+  display: flex;
+}
+
+.tiny-book {
+  position: relative;
+  width: 36px;
+  height: 22px;
+  border-bottom: 1px solid var(--white);
+}
+
+.book-page {
+  position: absolute;
+  bottom: 0;
+  width: 17px;
+  height: 20px;
+  border: 1px solid var(--white);
+  background: var(--black);
+}
+
+.book-page-left {
+  left: 0;
+  transform-origin: right bottom;
+}
+
+.book-page-right {
+  right: 0;
+  transform-origin: left bottom;
+  animation: pageTurn 1.2s steps(2, end) infinite;
+}
+
+.tiny-pen {
+  position: relative;
+  width: 24px;
+  height: 1px;
+  background: var(--white);
+  transform: rotate(-22deg);
+  animation: penWrite 0.9s steps(3, end) infinite;
+}
+
+.tiny-pen::after {
+  content: "";
+  position: absolute;
+  right: -4px;
+  top: -2px;
+  width: 5px;
+  height: 5px;
+  border-right: 1px solid var(--white);
+  border-bottom: 1px solid var(--white);
+  transform: rotate(-45deg);
 }
 
 .messages {
@@ -265,11 +366,34 @@ button {
   }
 }
 
+@keyframes pageTurn {
+  0%,
+  40% {
+    transform: skewY(0deg) scaleX(1);
+  }
+
+  70%,
+  100% {
+    transform: skewY(-12deg) scaleX(0.35);
+  }
+}
+
+@keyframes penWrite {
+  0%,
+  100% {
+    transform: translateX(0) rotate(-22deg);
+  }
+
+  50% {
+    transform: translateX(6px) rotate(-22deg);
+  }
+}
+
 .message {
   max-width: 100%;
   color: var(--white);
   font-size: 18px;
-  line-height: 1.78;
+  line-height: 1.58;
 }
 
 .message-error {
@@ -279,6 +403,23 @@ button {
 .message p {
   margin: 0;
   white-space: pre-wrap;
+}
+
+.message-witch p {
+  max-width: 100%;
+  font-family:
+    "KaiTi",
+    "STKaiti",
+    "LXGW WenKai",
+    "Microsoft YaHei",
+    serif;
+  font-size: 19px;
+  line-height: 1.62;
+  font-style: normal;
+}
+
+.message-player p {
+  font-style: normal;
 }
 
 .quick-options {
@@ -298,12 +439,17 @@ button {
   text-align: left;
   font-size: 14px;
   line-height: 1.35;
+  transition:
+    box-shadow 140ms ease,
+    transform 140ms ease;
 }
 
 .choice-button:hover {
   text-decoration: none;
-  background: var(--white);
-  color: var(--black);
+  box-shadow:
+    inset 0 0 0 1px var(--white),
+    0 0 12px rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
 }
 
 .choice-button:disabled {

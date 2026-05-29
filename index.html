@@ -4,10 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>时间之外</title>
-    <link rel="stylesheet" href="styles.css?v=secret-prompt" />
+    <link rel="stylesheet" href="styles.css?v=brighter-stars" />
   </head>
   <body>
     <button class="music-button" id="musicButton" type="button" aria-pressed="false">音乐</button>
+    <button class="music-mode-button" id="musicModeButton" type="button">8bit</button>
     <button class="settings-button" id="settingsButton" type="button">设置</button>
 
     <main class="room" aria-label="时间之外">
@@ -17,11 +18,15 @@
         <span class="star star-b"></span>
         <span class="star star-c"></span>
         <span class="star star-d"></span>
+        <span class="star star-e"></span>
+        <span class="star star-f"></span>
+        <span class="star star-g"></span>
+        <span class="star star-h"></span>
       </div>
 
       <img class="witch-image" src="reference-princess.jpg" alt="普瑞赛斯参考形象" />
 
-      <section class="dialogue-box" aria-label="对话框">
+      <section class="dialogue-box" id="dialogueBox" aria-label="对话框">
         <div class="coffee-cup" aria-hidden="true">
           <span class="steam steam-a"></span>
           <span class="steam steam-b"></span>
@@ -29,6 +34,13 @@
           <span class="cup-body"></span>
           <span class="cup-handle"></span>
           <span class="cup-saucer"></span>
+        </div>
+        <div class="writing-indicator" id="writingIndicator" aria-hidden="true">
+          <span class="tiny-book">
+            <span class="book-page book-page-left"></span>
+            <span class="book-page book-page-right"></span>
+          </span>
+          <span class="tiny-pen"></span>
         </div>
         <div class="messages" id="messages">
           <article class="message message-witch">
@@ -91,6 +103,6 @@
       </div>
     </aside>
 
-    <script src="app.js?v=secret-prompt"></script>
+    <script src="app.js?v=dialogue-filter-fix"></script>
   </body>
 </html>
