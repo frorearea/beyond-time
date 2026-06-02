@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const root = __dirname;
+const flutterRoot = path.join(root, "build", "web");
 const port = Number(process.env.PORT || 4173);
 
 const mimeTypes = {
@@ -10,6 +11,9 @@ const mimeTypes = {
   ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".wasm": "application/wasm",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".png": "image/png",
@@ -108,29 +112,48 @@ async function handleChat(request, response) {
 }
 
 function serveStatic(pathname, response) {
+  const staticRoot = fs.existsSync(path.join(flutterRoot, "index.html")) ? flutterRoot : root;
   const safePath = pathname === "/" ? "/index.html" : pathname;
-  const filePath = path.normalize(path.join(root, safePath));
+  const filePath = path.normalize(path.join(staticRoot, safePath));
 
-  if (filePath !== root && !filePath.startsWith(root + path.sep)) {
+  if (filePath !== staticRoot && !filePath.startsWith(staticRoot + path.sep)) {
     sendJson(response, 403, { error: "Forbidden" });
     return;
   }
 
   fs.readFile(filePath, (error, data) => {
     if (error) {
+      if (staticRoot === flutterRoot && !path.extname(safePath)) {
+        sendFile(path.join(flutterRoot, "index.html"), response);
+        return;
+      }
       sendJson(response, 404, { error: "Not found" });
       return;
     }
 
-    const ext = path.extname(filePath);
-    response.writeHead(200, {
-      "Content-Type": mimeTypes[ext] || "application/octet-stream",
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-      Pragma: "no-cache",
-      Expires: "0",
-    });
-    response.end(data);
+    sendData(filePath, data, response);
   });
+}
+
+function sendFile(filePath, response) {
+  fs.readFile(filePath, (error, data) => {
+    if (error) {
+      sendJson(response, 404, { error: "Not found" });
+      return;
+    }
+    sendData(filePath, data, response);
+  });
+}
+
+function sendData(filePath, data, response) {
+  const ext = path.extname(filePath);
+  response.writeHead(200, {
+    "Content-Type": mimeTypes[ext] || "application/octet-stream",
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+    Pragma: "no-cache",
+    Expires: "0",
+  });
+  response.end(data);
 }
 
 function readJson(request) {

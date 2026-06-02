@@ -1,2 +1,10 @@
 使用说明.md
 使用说明.txt
+
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+.idea/
+*.iml

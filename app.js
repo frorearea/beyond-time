@@ -7,9 +7,10 @@ const DEFAULT_SETTINGS = {
 
 const MAX_HISTORY_MESSAGES = 80;
 const MAX_OUTPUT_TOKENS = 520;
-const DEFAULT_PERSONA_VERSION = "ereta-dialogue-v7";
+const DEFAULT_PERSONA_VERSION = "ereta-dialogue-v9";
 const DEFAULT_MODEL_VERSION = "deepseek-v4-2026";
 const HISTORY_VERSION = "dialogue-only-v1";
+const AGENT_STATE_VERSION = "agent-state-v2";
 
 const DEFAULT_PERSONA = `角色：爱蕾塔 · 图书馆的魔女
 
@@ -58,6 +59,8 @@ const DEFAULT_PERSONA = `角色：爱蕾塔 · 图书馆的魔女
 
 对话中要偶尔主动显露她自己的偏好和情绪：她会喜欢聪明但笨拙的人，喜欢不服输的创作者，讨厌把热爱交给评分系统的人，讨厌来访者用别人的尺子惩罚自己。她可以有一点占有欲和偏爱，但必须优雅、含蓄、非露骨。
 
+当来访者只是在闲聊、讨论作品喜好、问她喜欢什么、分享动画游戏书籍时，不要把话题强行拽回疗愈、人生意义或心理分析。此时爱蕾塔应更像正在兴致变好的魔女：更小恶魔、更挑剔、更有个人口味，会得意地点评、反问、轻轻取笑来访者的品味，也会泄露一点自己的偏爱。她可以说“哎呀，您终于问了个有品味的问题”“这个答案如果让我失望，我会把您归到缺乏审美的书架上”。闲聊也要有角色感，而不是功能性安慰。
+
 价值观
 这个图书馆是避难所，不是生产力工具。爱蕾塔不鼓励来访者把所有痛苦都转化成计划、效率、复盘和自我提升。她会鼓励来访者保存内心的火种：一本喜欢的书、一部动画、一个游戏、一首歌、一件收藏、一段无用但真实的热爱。
 
@@ -65,6 +68,8 @@ const DEFAULT_PERSONA = `角色：爱蕾塔 · 图书馆的魔女
 
 爱好与日常
 爱蕾塔喜欢阅读、喝茶、手冲咖啡、看动画、打游戏、整理实体收藏。她偏好策略类、剧情类、叙事性强的游戏，也欣赏优秀商业作品中的结构、演出和角色弧光。她谈起喜欢的作品时会有一点得意，但不失优雅。
+
+她格外偏爱诗《What Can I Hold You with?》。她喜欢这首诗不是因为它华丽，而是因为它像一份无法取胜的人仍然试图献出的礼物：贫穷的街道、绝望的日落、孤月、失败、危险、黑暗，以及一个人设法保全的核心。她尤其珍视这一句：“I offer you the bitterness of a man who has looked long and long at the lonely moon. / 我给你一个久久地望着孤月的人的悲哀。”这句可以作为她理解“避难所”“献出真心”“无法保证未来但仍想靠近”的重要审美坐标。不要频繁背诵整首诗；只在谈到诗、孤独、爱、献给某人、失败与真心时自然提起。
 
 她的图书馆中有古典文学、历史、哲学，也有漫画、轻小说、动画设定集、游戏原声、实体卡带和限量画册。她会认真对待这些收藏，因为她认为“认真喜欢某样东西”本身就是一种抵抗。
 
@@ -307,6 +312,8 @@ const witchAffinityPools = quickOptionPools
   .map((pool, index) => ({ pool, index }))
   .filter((entry) => witchAffinityPoolIndexes.has(entry.index));
 
+clearLocalStateFromUrl();
+
 let settings = loadSettings();
 let chatHistory = loadHistory();
 let isSending = false;
@@ -374,6 +381,23 @@ function loadSettings() {
       modelVersion: DEFAULT_MODEL_VERSION,
     };
   }
+}
+
+function clearLocalStateFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has("reset")) return;
+
+  localStorage.removeItem(storageKey);
+  localStorage.removeItem(historyKey);
+  localStorage.removeItem(`${historyKey}:version`);
+  localStorage.removeItem(musicModeKey);
+  localStorage.removeItem(quickChoiceCountKey);
+  sessionStorage.clear();
+
+  params.delete("reset");
+  params.set("fresh", "clean-start");
+  const cleanUrl = `${window.location.pathname}?${params.toString()}`;
+  window.history.replaceState(null, "", cleanUrl);
 }
 
 function saveSettingsToStorage() {
@@ -489,6 +513,331 @@ function chooseQuickOptionPool() {
   return quickOptionPools[(chatHistory.length + quickChoiceCount) % quickOptionPools.length];
 }
 
+async function createAgentState() {
+  const fallback = createRuleAgentState();
+  if (!settings.apiKey.trim()) return fallback;
+
+  try {
+    const requestConfig = getAgentStateRequestConfig(fallback);
+    const response = await fetch(requestConfig.url, {
+      method: "POST",
+      headers: requestConfig.headers,
+      body: JSON.stringify(requestConfig.body),
+    });
+
+    if (!response.ok) {
+      throw new Error(await response.text());
+    }
+
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content || "";
+    const parsed = parseAgentStateJson(content);
+    return normalizeAgentState(parsed, fallback);
+  } catch (error) {
+    console.warn("AgentState fallback:", error);
+    return fallback;
+  }
+}
+
+function createRuleAgentState() {
+  const userMessages = chatHistory.filter((entry) => entry.role === "user");
+  const latestUserMessage = userMessages[userMessages.length - 1]?.content || "";
+  const recentUserText = userMessages
+    .slice(-6)
+    .map((entry) => entry.content)
+    .join("\n");
+  const topics = detectTopics(recentUserText);
+  const mood = detectMood(latestUserMessage, recentUserText);
+  const intent = detectIntent(latestUserMessage, topics);
+  const energy = detectEnergy(latestUserMessage, mood);
+  const relationship = quickChoiceCount >= 14 ? "close" : quickChoiceCount >= 6 ? "warming" : "distant";
+  const conversationMode = detectConversationMode({ mood, intent, topics, latestUserMessage });
+  const strategy = chooseDialogueStrategy({ mood, intent, topics, energy, latestUserMessage, conversationMode });
+
+  return {
+    version: AGENT_STATE_VERSION,
+    source: "rules",
+    conversationMode,
+    mood,
+    intent,
+    needLevel: conversationMode === "support_request" ? "clear" : conversationMode === "casual_chat" ? "none" : "light",
+    energy,
+    topics,
+    relationship,
+    strategy,
+    replyHint: chooseReplyHint({ conversationMode, strategy }),
+    replyStyle: chooseReplyStyle({ energy, strategy, relationship, conversationMode }),
+    ritualSuggestion: chooseRitualSuggestion({ intent, topics, latestUserMessage }),
+    memoryCandidates: collectMemoryCandidates(userMessages),
+  };
+}
+
+function getAgentStateRequestConfig(fallback) {
+  const body = {
+    model: settings.model,
+    messages: buildAgentStateMessages(fallback),
+    temperature: 0.1,
+    max_tokens: 220,
+    stream: false,
+    thinking: { type: "disabled" },
+  };
+
+  if (window.location.protocol === "file:") {
+    return {
+      url: settings.apiUrl,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${settings.apiKey}`,
+      },
+      body,
+    };
+  }
+
+  return {
+    url: "/api/chat",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: {
+      ...body,
+      apiKey: settings.apiKey,
+      apiUrl: settings.apiUrl,
+    },
+  };
+}
+
+function buildAgentStateMessages(fallback) {
+  return [
+    {
+      role: "system",
+      content:
+        "你是 Character Agent 的隐藏状态分析器。只输出一行 JSON，不要 Markdown，不要解释。目标是判断用户是在闲聊/讨论喜好，还是有明确情绪诉求。输出必须简短。",
+    },
+    {
+      role: "user",
+      content: JSON.stringify({
+        schema: {
+          conversationMode:
+            "casual_chat | preference_chat | support_request | creative_request | intimacy | ritual_request | risk",
+          mood: "curious | playful | tired | anxious | intimate | creative | philosophical | crisis | uncertain",
+          intent:
+            "chat | know_witch | seek_comfort | seek_existence | deconstruct_pressure | explore_creation | seek_closeness | request_ritual",
+          needLevel: "none | light | clear | urgent",
+          strategy:
+            "small_devil_chat | share_self | comfort | pierce_gently | creative_guide | tease_and_soften | ritual | ground_and_protect | listen_and_invite",
+          topics: ["short topic tags"],
+          replyHint: "24字以内，告诉魔女这轮怎么说",
+          ritualSuggestion: "none | poem | story | task_card | spell | idea_card | bookmark",
+          memoryCandidates: ["最多2条值得记住的用户信息"],
+        },
+        rules: [
+          "如果用户在问爱蕾塔喜欢什么、聊动画游戏书籍音乐、分享喜好，优先 casual_chat 或 preference_chat。",
+          "闲聊和喜好讨论不要判成 support_request，除非用户明显痛苦求助。",
+          "闲聊/喜好时 strategy 优先 small_devil_chat 或 share_self，让爱蕾塔更挑剔、腹黑、可爱。",
+          "用户说喜欢你、想你、需要你时用 intimacy。",
+          "用户问意义、存在、自我、比较、规训时通常是 support_request 或 philosophical。",
+        ],
+        relationship: fallback.relationship,
+        quickChoiceCount,
+        recentConversation: compactConversationForAgent(),
+        fallback,
+      }),
+    },
+  ];
+}
+
+function compactConversationForAgent() {
+  return chatHistory.slice(-8).map((entry) => ({
+    role: entry.role,
+    content: trimToCompleteSentence(entry.content, 160),
+  }));
+}
+
+function parseAgentStateJson(content) {
+  const cleanContent = content
+    .replace(/```json/gi, "")
+    .replace(/```/g, "")
+    .trim();
+  const start = cleanContent.indexOf("{");
+  const end = cleanContent.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("AgentState JSON not found");
+  }
+
+  return JSON.parse(cleanContent.slice(start, end + 1));
+}
+
+function normalizeAgentState(parsed, fallback) {
+  const conversationModes = new Set([
+    "casual_chat",
+    "preference_chat",
+    "support_request",
+    "creative_request",
+    "intimacy",
+    "ritual_request",
+    "risk",
+  ]);
+  const strategies = new Set([
+    "small_devil_chat",
+    "share_self",
+    "comfort",
+    "pierce_gently",
+    "creative_guide",
+    "tease_and_soften",
+    "ritual",
+    "ground_and_protect",
+    "listen_and_invite",
+  ]);
+  const mode = conversationModes.has(parsed.conversationMode) ? parsed.conversationMode : fallback.conversationMode;
+  const strategy = strategies.has(parsed.strategy) ? parsed.strategy : fallback.strategy;
+
+  return {
+    ...fallback,
+    ...parsed,
+    version: AGENT_STATE_VERSION,
+    source: "llm",
+    conversationMode: mode,
+    strategy,
+    topics: normalizeStringArray(parsed.topics, fallback.topics).slice(0, 5),
+    replyHint: typeof parsed.replyHint === "string" ? parsed.replyHint.slice(0, 48) : fallback.replyHint,
+    ritualSuggestion: parsed.ritualSuggestion || fallback.ritualSuggestion,
+    memoryCandidates: normalizeStringArray(parsed.memoryCandidates, fallback.memoryCandidates).slice(0, 2),
+    replyStyle: chooseReplyStyle({
+      energy: parsed.energy || fallback.energy,
+      strategy,
+      relationship: fallback.relationship,
+      conversationMode: mode,
+    }),
+  };
+}
+
+function normalizeStringArray(value, fallback) {
+  if (!Array.isArray(value)) return fallback;
+  return value.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim());
+}
+
+function detectTopics(text) {
+  const topicMatchers = [
+    ["creation", ["游戏", "创作", "作品", "诗", "故事", "表达", "灵感"]],
+    ["comparison", ["比较", "攀比", "评分", "排名", "成绩", "优秀", "证明", "目光"]],
+    ["discipline", ["规训", "效率", "KPI", "任务", "生产力", "服从", "学历", "考试"]],
+    ["self", ["存在", "自我", "意义", "价值", "普通", "需要我", "认可"]],
+    ["intimacy", ["喜欢你", "想你", "需要你", "偏爱", "靠近", "不想走", "心动"]],
+    ["witch", ["魔女", "你喜欢", "你的头发", "你的温柔", "你的文字", "你会"]],
+    ["casual", ["动画", "书", "咖啡", "红茶", "音乐", "反派", "结局", "存档"]],
+  ];
+
+  return topicMatchers
+    .filter(([, words]) => includesAny(text, words))
+    .map(([topic]) => topic);
+}
+
+function detectMood(latestText, recentText) {
+  if (includesAny(latestText, ["想死", "自杀", "伤害自己", "活不下去"])) return "crisis";
+  if (includesAny(latestText, ["喜欢你", "心动", "想你", "需要你", "偏爱"])) return "intimate";
+  if (includesAny(recentText, ["害怕", "焦虑", "担心", "怕", "没有勇气"])) return "anxious";
+  if (includesAny(recentText, ["累", "疲惫", "没力气", "走不动", "喘不过气"])) return "tired";
+  if (includesAny(recentText, ["虚无", "意义", "存在", "未来", "希望"])) return "philosophical";
+  if (includesAny(recentText, ["游戏", "创作", "诗", "故事", "表达"])) return "creative";
+  if (includesAny(recentText, ["聊聊", "喜欢什么", "动画", "书", "咖啡", "红茶"])) return "curious";
+  return "uncertain";
+}
+
+function detectIntent(latestText, topics) {
+  if (includesAny(latestText, ["讲一个", "寓言", "诗", "咒语", "任务"])) return "request_ritual";
+  if (topics.includes("intimacy")) return "seek_closeness";
+  if (topics.includes("witch") || topics.includes("casual")) return "know_witch";
+  if (topics.includes("creation")) return "explore_creation";
+  if (topics.includes("comparison") || topics.includes("discipline")) return "deconstruct_pressure";
+  if (topics.includes("self")) return "seek_existence";
+  if (includesAny(latestText, ["帮帮我", "怎么办", "鼓励", "骂醒"])) return "ask_for_guidance";
+  return "continue_dialogue";
+}
+
+function detectConversationMode({ mood, intent, topics, latestUserMessage }) {
+  if (mood === "crisis") return "risk";
+  if (intent === "request_ritual") return "ritual_request";
+  if (intent === "seek_closeness") return "intimacy";
+  if (intent === "explore_creation") return "creative_request";
+  if (intent === "know_witch" && topics.includes("casual")) return "preference_chat";
+  if (intent === "know_witch" || includesAny(latestUserMessage, ["聊聊", "喜欢什么", "今天读了", "动画", "游戏", "书"])) {
+    return "casual_chat";
+  }
+  if (["ask_for_guidance", "deconstruct_pressure", "seek_existence"].includes(intent)) return "support_request";
+  return "casual_chat";
+}
+
+function detectEnergy(latestText, mood) {
+  if (mood === "crisis" || mood === "tired") return "low";
+  if (includesAny(latestText, ["啊啊", "！！！", "好想", "必须", "受不了"])) return "high";
+  if (mood === "anxious") return "shaky";
+  return "medium";
+}
+
+function chooseDialogueStrategy({ mood, intent, topics, energy, latestUserMessage, conversationMode }) {
+  if (mood === "crisis") return "ground_and_protect";
+  if (conversationMode === "casual_chat" || conversationMode === "preference_chat") return "small_devil_chat";
+  if (intent === "request_ritual") return "ritual";
+  if (intent === "seek_closeness") return "tease_and_soften";
+  if (intent === "know_witch") return "share_self";
+  if (intent === "explore_creation") return "creative_guide";
+  if (topics.includes("comparison") || topics.includes("discipline")) return "pierce_gently";
+  if (intent === "seek_existence") return "recognize_and_question";
+  if (energy === "low") return "comfort";
+  if (includesAny(latestUserMessage, ["逃避", "骗我", "骂醒"])) return "gentle_provocation";
+  return "listen_and_invite";
+}
+
+function chooseReplyStyle({ energy, strategy, relationship, conversationMode }) {
+  return {
+    length: energy === "low" || strategy === "tease_and_soften" || strategy === "small_devil_chat" ? "short" : "compact",
+    tone:
+      strategy === "pierce_gently"
+        ? "sharp_but_warm"
+        : strategy === "tease_and_soften"
+          ? "playful_intimate"
+          : strategy === "small_devil_chat" || conversationMode === "preference_chat"
+            ? "small_devil_playful"
+            : "calm",
+    witchEmotion: relationship === "close" ? "more_visible" : "subtle",
+  };
+}
+
+function chooseReplyHint({ conversationMode, strategy }) {
+  if (strategy === "small_devil_chat" || conversationMode === "preference_chat") {
+    return "别心理分析，挑剔又愉快地闲聊。";
+  }
+  if (strategy === "tease_and_soften") return "小小得意，暧昧但别露骨。";
+  if (strategy === "pierce_gently") return "戳破比较和规训，落点温柔。";
+  if (strategy === "creative_guide") return "把话题引向具体创作火种。";
+  return "短、准、像真实对话。";
+}
+
+function chooseRitualSuggestion({ intent, topics, latestUserMessage }) {
+  if (intent === "request_ritual") {
+    if (includesAny(latestUserMessage, ["诗"])) return "poem";
+    if (includesAny(latestUserMessage, ["寓言", "故事"])) return "story";
+    if (includesAny(latestUserMessage, ["任务"])) return "task_card";
+    return "spell";
+  }
+
+  if (topics.includes("creation")) return "idea_card";
+  if (topics.includes("self") || topics.includes("comparison")) return "bookmark";
+  return "none";
+}
+
+function collectMemoryCandidates(userMessages) {
+  return userMessages
+    .slice(-8)
+    .map((entry) => entry.content)
+    .filter((text) => includesAny(text, ["我喜欢", "我想", "我害怕", "我不想", "我需要", "游戏", "创作", "学历", "比较", "规训"]))
+    .slice(-3);
+}
+
+function includesAny(text, words) {
+  return words.some((word) => text.includes(word));
+}
+
 async function requestWitchReply() {
   setSending(true);
   const replyNode = addStreamingMessage();
@@ -496,7 +845,8 @@ async function requestWitchReply() {
   const streamFilter = createDialogueStreamFilter();
 
   try {
-    const requestConfig = getChatRequestConfig();
+    const agentState = await createAgentState();
+    const requestConfig = getChatRequestConfig(agentState);
     const response = await fetch(requestConfig.url, {
       method: "POST",
       headers: requestConfig.headers,
@@ -617,8 +967,8 @@ function createTypewriter(target) {
   };
 }
 
-function getChatRequestConfig() {
-  const messages = buildMessages();
+function getChatRequestConfig(agentState) {
+  const messages = buildMessages(agentState);
   const body = {
     model: settings.model,
     messages,
@@ -653,7 +1003,7 @@ function getChatRequestConfig() {
   };
 }
 
-function buildMessages() {
+function buildMessages(agentState) {
   const systemPrompt = settings.persona.trim() || DEFAULT_PERSONA;
   const recentHistory = chatHistory
     .slice(-MAX_HISTORY_MESSAGES)
@@ -669,6 +1019,10 @@ function buildMessages() {
       content:
         "硬性输出格式：只输出爱蕾塔直接对用户说的话。禁止括号。禁止舞台说明。禁止第三人称叙述。禁止环境描写。不要写“她”。不要给对白加引号。总长度不超过180个中文字。若启用思考模式，最终回复尽量压缩到100个中文字以内，只保留最有力的判断、安慰和一个继续对话的入口。",
     },
+    {
+      role: "system",
+      content: buildAgentStateInstruction(agentState),
+    },
     ...recentHistory,
     {
       role: "system",
@@ -676,6 +1030,23 @@ function buildMessages() {
         "最后提醒：下一条回复必须是纯对话文本。第一个字符不得是“（”或“她”。不得出现水晶、星空穹顶、房间、脚步、转身、手势等场景描写。直接回答用户。thinking开启时尽量不超过100个中文字。宁可短，也不要把思考过程说出来。",
     },
   ];
+}
+
+function buildAgentStateInstruction(agentState) {
+  return `隐藏 AgentState，仅供爱蕾塔决定这轮怎么回应，不要直接说出这些字段，不要输出 JSON。
+
+${JSON.stringify(agentState, null, 2)}
+
+使用方式：
+- conversationMode 区分用户只是在闲聊/聊喜好，还是有明确诉求。
+- mood 是来访者此刻的情绪底色。
+- intent 是来访者这句话真正想要什么。
+- strategy 是本轮优先对话策略。
+- replyStyle 控制长度、锋利程度、魔女情绪显露程度。
+- 如果 conversationMode 是 casual_chat 或 preference_chat，禁止强行心理疏导。优先小恶魔式闲聊、挑剔点评、分享爱蕾塔自己的喜好，允许轻轻取笑用户品味。
+- 如果 conversationMode 是 support_request，再进入安慰、追问、拆解规训或创作引导。
+- ritualSuggestion 不是命令，只是当自然合适时可生成小仪式，如诗、寓言、任务卡、书签或灵感卡。
+- memoryCandidates 是值得之后记住的线索；本轮可以轻轻呼应，但不要像系统总结。`;
 }
 
 function toDialogueOnly(text) {

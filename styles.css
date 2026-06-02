@@ -81,7 +81,7 @@ button {
   width: min(100vw, var(--stage-max-width));
   height: min(100vh, var(--stage-max-height));
   display: grid;
-  grid-template-rows: minmax(0, 1fr) minmax(300px, 42%);
+  grid-template-rows: minmax(0, 1fr) auto minmax(300px, 40%);
   align-items: end;
   justify-items: center;
   padding: 28px 22px 24px;
@@ -90,7 +90,7 @@ button {
 
 .sky-lines {
   position: absolute;
-  inset: 52px 0 44%;
+  inset: 52px 0 43%;
   z-index: 0;
   pointer-events: none;
 }
@@ -193,6 +193,7 @@ button {
 .witch-image {
   position: relative;
   z-index: 1;
+  grid-row: 1;
   width: auto;
   max-width: min(88%, 760px);
   max-height: min(100%, 620px);
@@ -201,9 +202,83 @@ button {
   display: block;
 }
 
+.slogan-quote {
+  position: relative;
+  z-index: 2;
+  grid-row: 2;
+  width: min(760px, calc(100% - 48px));
+  margin: 0 0 14px;
+  color: rgba(255, 255, 255, 0.86);
+  text-align: center;
+  pointer-events: none;
+  font-family:
+    Georgia,
+    "Times New Roman",
+    "KaiTi",
+    "STKaiti",
+    serif;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.18);
+}
+
+.slogan-quote blockquote {
+  position: relative;
+  margin: 0;
+  padding: 0 34px;
+}
+
+.slogan-quote blockquote::before,
+.slogan-quote blockquote::after {
+  position: absolute;
+  top: -12px;
+  color: rgba(255, 255, 255, 0.34);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 42px;
+  line-height: 1;
+}
+
+.slogan-quote blockquote::before {
+  content: "“";
+  left: 0;
+}
+
+.slogan-quote blockquote::after {
+  content: "”";
+  right: 0;
+}
+
+.slogan-quote p {
+  margin: 0;
+}
+
+.slogan-en {
+  font-size: 15px;
+  font-style: italic;
+  line-height: 1.45;
+}
+
+.slogan-zh {
+  margin-top: 4px;
+  font-family:
+    "KaiTi",
+    "STKaiti",
+    "LXGW WenKai",
+    "Microsoft YaHei",
+    serif;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.slogan-quote figcaption {
+  margin-top: 5px;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 11px;
+  font-style: italic;
+}
+
 .dialogue-box {
   position: relative;
   z-index: 2;
+  grid-row: 3;
   width: min(920px, 100%);
   height: 100%;
   min-height: 300px;
@@ -595,7 +670,7 @@ input,
   .room {
     min-height: 100vh;
     height: auto;
-    grid-template-rows: auto minmax(280px, auto);
+    grid-template-rows: auto auto minmax(280px, auto);
     padding: 52px 12px 14px;
   }
 
@@ -637,6 +712,33 @@ input,
     width: min(96vw, 520px);
     max-width: 92vw;
     max-height: 56vh;
+  }
+
+  .slogan-quote {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+
+  .slogan-quote blockquote {
+    padding: 0 22px;
+  }
+
+  .slogan-quote blockquote::before,
+  .slogan-quote blockquote::after {
+    top: -8px;
+    font-size: 30px;
+  }
+
+  .slogan-en {
+    font-size: 12px;
+  }
+
+  .slogan-zh {
+    font-size: 12px;
+  }
+
+  .slogan-quote figcaption {
+    font-size: 10px;
   }
 
   .dialogue-box {

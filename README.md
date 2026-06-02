@@ -8,17 +8,33 @@
 
 ## 当前形态
 
-- 黑白极简网页界面
+- Flutter Web 黑白极简界面
 - 魔女形象参考图展示
 - 纯文本对话框
 - DeepSeek Chat Completions API 后端代理
 - 流式回复与打字机显示
 - 可编辑角色 Prompt
 - 心声选项与自由输入并存
-- 舒缓 8bit 背景音乐
+- 舒缓 8bit / 16bit 背景音乐
+- 内置英文字体与中文文楷字体
 - 本地浏览器保存 API Key、模型和 Prompt
 
 ## 本地运行
+
+先安装依赖：
+
+```powershell
+npm install
+D:\codes\flutter_\flutter\bin\flutter.bat pub get
+```
+
+构建 Flutter Web 页面：
+
+```powershell
+D:\codes\flutter_\flutter\bin\flutter.bat build web
+```
+
+启动本地服务：
 
 ```powershell
 npm start
@@ -28,6 +44,14 @@ npm start
 
 ```text
 http://localhost:4173
+```
+
+`npm start` 会继续提供 API 代理，并优先打开 Flutter 构建出的 `build/web` 页面。若你已经把 Flutter 加入 PATH，也可以把上面的命令简写为：
+
+```powershell
+flutter pub get
+flutter build web
+npm start
 ```
 
 ## API 设置
