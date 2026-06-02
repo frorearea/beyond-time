@@ -21,21 +21,6 @@
 
 ## 本地运行
 
-先安装依赖：
-
-```powershell
-npm install
-D:\codes\flutter_\flutter\bin\flutter.bat pub get
-```
-
-构建 Flutter Web 页面：
-
-```powershell
-D:\codes\flutter_\flutter\bin\flutter.bat build web
-```
-
-启动本地服务：
-
 ```powershell
 npm start
 ```
@@ -46,13 +31,7 @@ npm start
 http://localhost:4173
 ```
 
-`npm start` 会继续提供 API 代理，并优先打开 Flutter 构建出的 `build/web` 页面。若你已经把 Flutter 加入 PATH，也可以把上面的命令简写为：
-
-```powershell
-flutter pub get
-flutter build web
-npm start
-```
+`npm start` 会继续提供 API 代理，并优先打开 Flutter 构建出的 `build/web` 页面。Flutter 的安装和构建方式之后再整理成更通用的说明。
 
 ## API 设置
 
