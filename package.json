@@ -4,6 +4,7 @@
   "private": true,
   "description": "A small local witch-chat sanctuary with a configurable LLM backend.",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build:windows-exe": "node scripts/build-windows-bundle.js"
   }
 }

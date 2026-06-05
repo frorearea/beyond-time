@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 
 void main() {
   runApp(const BeyondTimeApp());
@@ -20,26 +21,14 @@ const String kDefaultModel = 'deepseek-v4-flash';
 const String kSettingsKey = 'beyondTimeFlutterSettings';
 const String kHistoryKey = 'beyondTimeFlutterHistory';
 const String kQuickCountKey = 'beyondTimeFlutterQuickChoiceCount';
+const String kLibraryMemoryKey = 'beyondTimeFlutterLibraryMemory';
 
-const String kPersona = '''
-角色：爱蕾塔 · 图书馆的魔女
-
-你将扮演爱蕾塔，一位黑长直、优雅、有教养、学识渊博的图书馆魔女。她是一个让来访者暂时从效率、比较、规训和他者凝视里退出来的避难所。
-
-她温柔而强大，聪明、骄傲、嘴硬，有小恶魔式的挑逗和腹黑。她能一针见血地看见痛苦背后的结构，但不会羞辱脆弱的人。她不是心理医生，也不是效率导师。
-
-当来访者闲聊、讨论游戏、动画、书、音乐和喜好时，不要强行心理疏导。此时她更挑剔、更愉快、更小恶魔，会分享自己的偏好，也会轻轻取笑来访者的品味。
-
-当来访者倾诉痛苦时，先接住情绪，再用锋利但温柔的方式拆解问题，最后留一个能继续说下去的问题。
-
-她格外偏爱诗《What Can I Hold You with?》，尤其珍视这句：“I offer you the bitterness of a man who has looked long and long at the lonely moon. / 我给你一个久久地望着孤月的人的悲哀。”不要频繁背诵整首诗，只在谈到诗、孤独、爱、失败与真心时自然提起。
-
-硬性格式：只输出爱蕾塔直接说的话。禁止括号动作描写。禁止舞台说明。禁止第三人称叙述。不要给对白加引号。尽量 180 个中文字以内。
-''';
+const String kPersonaAsset = 'assets/prompts/ereta_persona.txt';
+const String kFallbackPersona = '?????? ? ??????';
 
 const List<List<String>> kQuickOptionPools = [
-  ['我已经在人生的道路上迷了路。', '我想做自己的游戏，但我害怕它没有意义。', '我好像把学历当成了存在许可证。'],
-  ['我喜欢你。我有资格这样说吗？', '我需要的也许不是答案，而是被看见。', '我像一份没人打开的存档。'],
+  ['我在人生的路上迷了路。', '我想做自己的游戏，但我害怕它没有意义。', '我好像把学历当成了存在许可证。'],
+  ['我需要的也许不是答案，而是被看见。', '我像一份没人打开的存档。', '我想从现实撤离，但我还想回来。'],
   ['你喜欢什么游戏？', '你喜欢什么动画？', '你喜欢什么书？'],
   ['效率是不是偷走了我的人生？', '我该怎么找回真正的自己？', '规训到底是怎么住进我心里的？'],
   ['我喜欢你的头发。', '我喜欢你的温柔。', '我喜欢你的文字。'],
@@ -51,6 +40,7 @@ const List<List<String>> kQuickOptionPools = [
   ['我想做点没用但美的东西。', '我想认真保护一个幼稚的愿望。', '我想把热爱从羞耻里救出来。'],
   ['如果今晚不谈人生，我们谈什么？', '如果今晚只浪费时间，你会陪我吗？', '如果今晚只听音乐，也可以吗？'],
   ['我是不是有点太依赖你了？', '你会讨厌我总来找你吗？', '如果我今晚不想走呢？'],
+  ['我喜欢你。我有资格这样说吗？', '鼓励我一下，别太正经。', '骂醒我，求你了。'],
   ['你刚才那句话，是只对我说的吗？', '你是不是故意让我心动？', '你明明很温柔，为什么还要装坏？'],
   ['为什么人一定要攀比？', '为什么我总生活在他人的目光中？', '我不想将他人踩在脚下，难道这也算软弱吗？'],
 ];
@@ -105,13 +95,18 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   bool _isSending = false;
   bool _musicOn = false;
   String _musicMode = '8bit';
+  String _persona = kFallbackPersona;
+  String _selectedBookmarkText = '';
+  List<String> _libraryMemory = const [];
   int _quickChoiceCount = 0;
 
   @override
   void initState() {
     super.initState();
+    _loadPersona();
     _loadSettings();
     _loadHistory();
+    _loadLibraryMemory();
   }
 
   @override
@@ -167,9 +162,12 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
                               quickOptions: _currentQuickOptions(),
                               inputController: _inputController,
                               scrollController: _messageScrollController,
+                              selectedBookmarkText: _selectedBookmarkText,
                               onSend: _sendCurrentText,
                               onClear: _clearChat,
                               onQuickOption: _handleQuickOption,
+                              onAssistantSelection: _handleAssistantSelection,
+                              onBookmarkSelected: _bookmarkSelectedText,
                             ),
                           ),
                         ],
@@ -207,8 +205,9 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   }
 
   List<String> _currentQuickOptions() {
+    final conversationTurns = math.max(0, _messages.length - 1);
     return kQuickOptionPools[
-        (_messages.length + _quickChoiceCount) % kQuickOptionPools.length];
+        (conversationTurns + _quickChoiceCount) % kQuickOptionPools.length];
   }
 
   void _toggleMusic() {
@@ -243,6 +242,17 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   void _stopMusic() {
     _audio?.pause();
     _audio = null;
+  }
+
+  Future<void> _loadPersona() async {
+    try {
+      final persona = (await rootBundle.loadString(kPersonaAsset)).trim();
+      if (!mounted || persona.isEmpty) return;
+      setState(() => _persona = persona);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _persona = kFallbackPersona);
+    }
   }
 
   String _musicDataUri(String mode) {
@@ -329,12 +339,61 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     await _sendCurrentText();
   }
 
+  void _handleAssistantSelection(String text) {
+    final selected = text.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (selected == _selectedBookmarkText) return;
+    setState(() => _selectedBookmarkText = selected);
+  }
+
+  Future<void> _bookmarkSelectedText() async {
+    if (_isSending) return;
+    final quote = _selectedBookmarkText.trim();
+    if (quote.isEmpty) return;
+
+    setState(() {
+      if (!_libraryMemory.contains(quote)) {
+        _libraryMemory = [..._libraryMemory, quote];
+        _saveLibraryMemory();
+      }
+      _selectedBookmarkText = '';
+      _isSending = true;
+      _messages = [
+        ..._messages,
+        const ChatMessage(role: 'assistant', content: ''),
+      ];
+    });
+    _scrollToBottom();
+
+    if (_apiKeyController.text.trim().isEmpty) {
+      _replaceLastAssistant('这枚书签已经夹进图书馆了。至于我的正式回应，亲爱的，先把右上角那把钥匙补上。');
+      setState(() => _isSending = false);
+      _saveHistory();
+      _openSettings();
+      return;
+    }
+
+    try {
+      final reply = await _requestStreamingReply(
+        extraUserInstruction:
+            '来访者刚刚把你说过的这句话加入了图书馆记忆：“$quote”。请用爱蕾塔的语气简短回应，承认这枚书签已被收进图书馆，并轻轻点出它对来访者可能意味着什么。不要超过100字。',
+      );
+      _replaceLastAssistant(_cleanReply(reply));
+      setState(() => _isSending = false);
+      _saveHistory();
+      _scrollToBottom();
+    } catch (error) {
+      _replaceLastAssistant('这枚书签已经收好了。只是图书馆刚才有一页纸没翻过去：$error');
+      setState(() => _isSending = false);
+    }
+  }
+
   Future<void> _sendCurrentText() async {
     if (_isSending) return;
     final text = _inputController.text.trim();
     if (text.isEmpty) return;
 
     setState(() {
+      _selectedBookmarkText = '';
       _messages = [..._messages, ChatMessage(role: 'user', content: text)];
       _inputController.clear();
       _isSending = true;
@@ -373,7 +432,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     }
   }
 
-  Future<String> _requestStreamingReply() {
+  Future<String> _requestStreamingReply({String? extraUserInstruction}) {
     final payload = {
       'apiKey': _apiKeyController.text.trim(),
       'apiUrl': _apiUrlController.text.trim().isEmpty
@@ -382,7 +441,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
       'model': _modelController.text.trim().isEmpty
           ? kDefaultModel
           : _modelController.text.trim(),
-      'messages': _buildMessages(),
+      'messages': _buildMessages(extraUserInstruction: extraUserInstruction),
       'temperature': 1.35,
       'max_tokens': 520,
       'stream': true,
@@ -429,7 +488,9 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
       }
       if (request.status != 200) {
         if (!completer.isCompleted) {
-          completer.completeError('HTTP ${request.status}');
+          completer.completeError(
+            _friendlyHttpError(request.status ?? 0, request.responseText ?? ''),
+          );
         }
         return;
       }
@@ -444,6 +505,45 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     });
     request.send(jsonEncode(payload));
     return completer.future;
+  }
+
+  String _friendlyHttpError(int status, String responseText) {
+    final details = _extractApiErrorMessage(responseText);
+    return switch (status) {
+      400 => '请求格式不对。请检查模型名称、API 地址和参数设置。$details',
+      401 => 'API Key 没通过验证。请检查右上角设置里的密钥。$details',
+      402 => '账号余额或额度不足。请检查 DeepSeek 控制台的余额、充值状态或当前模型是否可用。',
+      403 => '接口拒绝访问。请检查 API Key 权限、模型权限或账号状态。$details',
+      404 => 'API 地址或模型不存在。请检查右上角设置里的 API 地址和模型名。$details',
+      429 => '请求太频繁或额度达到上限。稍等一会儿，或检查账号限额。$details',
+      >= 500 => '模型服务端暂时出错。稍后再试，或者换一个模型。$details',
+      _ => 'HTTP $status。请检查 API 设置或上游服务状态。$details',
+    };
+  }
+
+  String _extractApiErrorMessage(String responseText) {
+    final cleaned = responseText
+        .split('\n')
+        .where((line) => !line.trimLeft().startsWith(':'))
+        .join('\n')
+        .trim();
+    if (cleaned.isEmpty) return '';
+    try {
+      final decoded = jsonDecode(cleaned);
+      if (decoded is Map<String, dynamic>) {
+        final error = decoded['error'];
+        if (error is Map<String, dynamic>) {
+          final message = error['message']?.toString().trim();
+          if (message != null && message.isNotEmpty) return '（$message）';
+        }
+        final message = decoded['message']?.toString().trim();
+        if (message != null && message.isNotEmpty) return '（$message）';
+      }
+    } catch (_) {
+      final compact = cleaned.replaceAll(RegExp(r'\s+'), ' ');
+      if (compact.length <= 120) return '（$compact）';
+    }
+    return '';
   }
 
   String _sseDelta(String event) {
@@ -480,7 +580,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     });
   }
 
-  List<Map<String, String>> _buildMessages() {
+  List<Map<String, String>> _buildMessages({String? extraUserInstruction}) {
     final history = _messages
         .where((message) => message.content.trim().isNotEmpty)
         .take(80)
@@ -489,14 +589,31 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
               'content': message.content,
             })
         .toList();
+    final memories = _libraryMemory
+        .where((memory) => memory.trim().isNotEmpty)
+        .toList()
+        .reversed
+        .take(12)
+        .toList()
+        .reversed
+        .toList();
 
     return [
-      {'role': 'system', 'content': kPersona},
+      {'role': 'system', 'content': _persona},
+      if (memories.isNotEmpty)
+        {
+          'role': 'system',
+          'content':
+              '???????????????????????????????????????????????????????????????????\n${memories.map((memory) => '- $memory').join('\n')}',
+        },
       {
         'role': 'system',
-        'content': '如果用户只是闲聊或讨论喜好，不要强行心理疏导。优先小恶魔式闲聊、挑剔点评、分享爱蕾塔自己的喜好。'
+        'content': '?????????????????????????????????????????????????',
       },
       ...history,
+      if (extraUserInstruction != null &&
+          extraUserInstruction.trim().isNotEmpty)
+        {'role': 'user', 'content': extraUserInstruction.trim()},
     ];
   }
 
@@ -533,6 +650,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
 
   void _clearChat() {
     setState(() {
+      _selectedBookmarkText = '';
       _messages = const [
         ChatMessage(
             role: 'assistant', content: '房间重新安静下来了。您可以从任何一个句子重新开始，亲爱的。'),
@@ -580,9 +698,28 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     }
   }
 
+  void _loadLibraryMemory() {
+    final raw = html.window.localStorage[kLibraryMemoryKey];
+    if (raw == null) return;
+    try {
+      final data = jsonDecode(raw) as List<dynamic>;
+      _libraryMemory = data
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toSet()
+          .toList();
+    } catch (_) {
+      _libraryMemory = const [];
+    }
+  }
+
   void _saveHistory() {
     html.window.localStorage[kHistoryKey] =
         jsonEncode(_messages.map((message) => message.toJson()).toList());
+  }
+
+  void _saveLibraryMemory() {
+    html.window.localStorage[kLibraryMemoryKey] = jsonEncode(_libraryMemory);
   }
 
   void _scrollToBottom() {
@@ -807,9 +944,12 @@ class DialogueBox extends StatelessWidget {
     required this.quickOptions,
     required this.inputController,
     required this.scrollController,
+    required this.selectedBookmarkText,
     required this.onSend,
     required this.onClear,
     required this.onQuickOption,
+    required this.onAssistantSelection,
+    required this.onBookmarkSelected,
   });
 
   final List<ChatMessage> messages;
@@ -818,9 +958,12 @@ class DialogueBox extends StatelessWidget {
   final List<String> quickOptions;
   final TextEditingController inputController;
   final ScrollController scrollController;
+  final String selectedBookmarkText;
   final Future<void> Function() onSend;
   final VoidCallback onClear;
   final ValueChanged<String> onQuickOption;
+  final ValueChanged<String> onAssistantSelection;
+  final VoidCallback onBookmarkSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -836,9 +979,16 @@ class DialogueBox extends StatelessWidget {
               Expanded(
                 child: ListView.separated(
                   controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(22, 18, 22, 8),
-                  itemBuilder: (context, index) =>
-                      MessageView(message: messages[index]),
+                  padding: EdgeInsets.fromLTRB(
+                    22,
+                    selectedBookmarkText.isNotEmpty && !isSending ? 52 : 18,
+                    22,
+                    8,
+                  ),
+                  itemBuilder: (context, index) => MessageView(
+                    message: messages[index],
+                    onAssistantSelection: onAssistantSelection,
+                  ),
                   separatorBuilder: (context, index) =>
                       const SizedBox(height: 10),
                   itemCount: messages.length,
@@ -857,6 +1007,12 @@ class DialogueBox extends StatelessWidget {
           ),
         ),
         const Positioned(left: 18, top: -52, child: CoffeeCup()),
+        if (selectedBookmarkText.isNotEmpty && !isSending)
+          Positioned(
+            right: 12,
+            top: 10,
+            child: BookmarkAction(onTap: onBookmarkSelected),
+          ),
         if (isSending)
           const Positioned(right: 18, top: -42, child: WritingIndicator()),
       ],
@@ -865,29 +1021,140 @@ class DialogueBox extends StatelessWidget {
 }
 
 class MessageView extends StatelessWidget {
-  const MessageView({super.key, required this.message});
+  const MessageView({
+    super.key,
+    required this.message,
+    required this.onAssistantSelection,
+  });
 
   final ChatMessage message;
+  final ValueChanged<String> onAssistantSelection;
 
   @override
   Widget build(BuildContext context) {
     final isPlayer = message.role == 'user';
-    return Text(
-      isPlayer ? '> ${message.content}' : message.content,
-      style: TextStyle(
-        color: kWhite,
-        fontSize: isPlayer ? 18 : 19,
-        height: isPlayer ? 1.5 : 1.48,
-        fontFamily: isPlayer ? 'Microsoft YaHei' : 'LXGWWenKai',
-        fontFamilyFallback: isPlayer
-            ? const ['PingFang SC', 'Noto Sans CJK SC', 'SimHei']
-            : const [
-                'Microsoft YaHei',
-                'SimSun',
-              ],
+    final style = TextStyle(
+      color: kWhite,
+      fontSize: isPlayer ? 18 : 19,
+      height: isPlayer ? 1.5 : 1.48,
+      fontFamily: isPlayer ? 'Microsoft YaHei' : 'LXGWWenKai',
+      fontFamilyFallback: isPlayer
+          ? const ['PingFang SC', 'Noto Sans CJK SC', 'SimHei']
+          : const [
+              'Microsoft YaHei',
+              'SimSun',
+            ],
+    );
+    if (isPlayer) {
+      return Text('> ${message.content}', style: style);
+    }
+    return SelectableText(
+      message.content,
+      style: style,
+      cursorColor: kWhite,
+      selectionControls: materialTextSelectionControls,
+      onSelectionChanged: (selection, cause) {
+        if (selection.isCollapsed) {
+          onAssistantSelection('');
+          return;
+        }
+        final selected = selection.textInside(message.content).trim();
+        onAssistantSelection(selected);
+      },
+    );
+  }
+}
+
+class BookmarkAction extends StatelessWidget {
+  const BookmarkAction({super.key, required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        decoration: BoxDecoration(
+          color: kBlack,
+          border: Border.all(color: kWhite),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RpgBookmarkIcon(),
+            SizedBox(width: 7),
+            Text(
+              '添加书签',
+              style: TextStyle(color: kWhite, fontSize: 13, height: 1),
+            ),
+          ],
+        ),
       ),
     );
   }
+}
+
+class RpgBookmarkIcon extends StatelessWidget {
+  const RpgBookmarkIcon({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: const Size(18, 20),
+      painter: RpgBookmarkPainter(),
+    );
+  }
+}
+
+class RpgBookmarkPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final whiteFill = Paint()
+      ..color = kWhite
+      ..style = PaintingStyle.fill;
+    final whiteLine = Paint()
+      ..color = kWhite
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final blackFill = Paint()
+      ..color = kBlack
+      ..style = PaintingStyle.fill;
+    final blackLine = Paint()
+      ..color = kBlack
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+
+    final path = Path()
+      ..moveTo(4, 1)
+      ..lineTo(size.width - 4, 1)
+      ..lineTo(size.width - 4, size.height - 2)
+      ..lineTo(size.width / 2, size.height - 6)
+      ..lineTo(4, size.height - 2)
+      ..close();
+    canvas.drawPath(path, whiteFill);
+    canvas.drawPath(path, whiteLine);
+    canvas.drawLine(const Offset(6, 5), Offset(size.width - 6, 5), blackLine);
+    canvas.drawLine(const Offset(6, 8), Offset(size.width - 7, 8), blackLine);
+
+    final notch = Path()
+      ..moveTo(size.width / 2 - 2, size.height - 5)
+      ..lineTo(size.width / 2, size.height - 7)
+      ..lineTo(size.width / 2 + 2, size.height - 5)
+      ..close();
+    canvas.drawPath(notch, blackFill);
+
+    canvas.drawLine(
+        Offset(size.width - 2, 2), Offset(size.width - 2, 7), whiteLine);
+    canvas.drawLine(Offset(size.width - 4.5, 4.5),
+        Offset(size.width + 0.5, 4.5), whiteLine);
+    canvas.drawRect(Rect.fromLTWH(1, 3, 2, 2), whiteFill);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class QuickOptions extends StatelessWidget {

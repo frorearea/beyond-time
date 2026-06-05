@@ -6,5 +6,6 @@
 .flutter-plugins-dependencies
 .packages
 build/
+release/
 .idea/
 *.iml
