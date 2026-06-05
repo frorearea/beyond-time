@@ -56,6 +56,8 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - reference-princess.jpg
+    - assets/images/ereta-cropped.png
+    - assets/images/ereta-cropped-display.png
     - assets/prompts/ereta_persona.txt
 
   fonts:

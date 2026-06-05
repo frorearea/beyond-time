@@ -28,8 +28,14 @@ const String kFallbackPersona = '?????? ? ??????';
 
 const List<List<String>> kQuickOptionPools = [
   ['我在人生的路上迷了路。', '我想做自己的游戏，但我害怕它没有意义。', '我好像把学历当成了存在许可证。'],
+  ['我感觉好累。', '一停下来我就会感到焦虑。', '我好像连休息都要有罪恶感。'],
+  ['我明明什么都没做，却已经很累。', '我害怕自己一慢下来就被丢下。', '我想休息，但脑子不肯放过我。'],
   ['我需要的也许不是答案，而是被看见。', '我像一份没人打开的存档。', '我想从现实撤离，但我还想回来。'],
   ['你喜欢什么游戏？', '你喜欢什么动画？', '你喜欢什么书？'],
+  ['你最近喜欢哪部作品？', '你会反复重看什么动画？', '你会珍藏哪一本书？'],
+  ['你喜欢什么样的游戏角色？', '你喜欢什么样的反派？', '你喜欢什么样的结局？'],
+  ['你会因为一首配乐记住作品吗？', '你喜欢实体收藏的什么地方？', '你会给我推荐一部作品吗？'],
+  ['你会怎么评价我的品味？', '如果我喜欢俗气的东西呢？', '你有没有偷偷偏爱的冷门作品？'],
   ['效率是不是偷走了我的人生？', '我该怎么找回真正的自己？', '规训到底是怎么住进我心里的？'],
   ['我喜欢你的头发。', '我喜欢你的温柔。', '我喜欢你的文字。'],
   ['给我讲一个很短的故事。', '给我讲一个不说教的寓言。', '给我写一首只属于今晚的诗。'],
@@ -103,10 +109,12 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   @override
   void initState() {
     super.initState();
+    _clearConversationStateFromUrl();
     _loadPersona();
     _loadSettings();
     _loadHistory();
     _loadLibraryMemory();
+    _jumpToBottomAfterOpen();
   }
 
   @override
@@ -131,6 +139,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final isNarrow = constraints.maxWidth < 700;
+              final dialogueHeight = constraints.maxHeight * 0.50;
               return Stack(
                 children: [
                   Positioned.fill(
@@ -153,8 +162,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
                           ),
                           const SloganQuote(),
                           SizedBox(
-                            height:
-                                isNarrow ? 360 : constraints.maxHeight * 0.40,
+                            height: dialogueHeight,
                             child: DialogueBox(
                               messages: _messages,
                               isSending: _isSending,
@@ -356,35 +364,15 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
         _saveLibraryMemory();
       }
       _selectedBookmarkText = '';
-      _isSending = true;
-      _messages = [
-        ..._messages,
-        const ChatMessage(role: 'assistant', content: ''),
-      ];
     });
-    _scrollToBottom();
-
-    if (_apiKeyController.text.trim().isEmpty) {
-      _replaceLastAssistant('这枚书签已经夹进图书馆了。至于我的正式回应，亲爱的，先把右上角那把钥匙补上。');
-      setState(() => _isSending = false);
-      _saveHistory();
-      _openSettings();
-      return;
-    }
-
-    try {
-      final reply = await _requestStreamingReply(
-        extraUserInstruction:
-            '来访者刚刚把你说过的这句话加入了图书馆记忆：“$quote”。请用爱蕾塔的语气简短回应，承认这枚书签已被收进图书馆，并轻轻点出它对来访者可能意味着什么。不要超过100字。',
-      );
-      _replaceLastAssistant(_cleanReply(reply));
-      setState(() => _isSending = false);
-      _saveHistory();
-      _scrollToBottom();
-    } catch (error) {
-      _replaceLastAssistant('这枚书签已经收好了。只是图书馆刚才有一页纸没翻过去：$error');
-      setState(() => _isSending = false);
-    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('书签已夹进图书馆。'),
+        duration: Duration(milliseconds: 1400),
+        backgroundColor: Colors.black,
+      ),
+    );
   }
 
   Future<void> _sendCurrentText() async {
@@ -583,6 +571,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   List<Map<String, String>> _buildMessages({String? extraUserInstruction}) {
     final history = _messages
         .where((message) => message.content.trim().isNotEmpty)
+        .where((message) => !_isBookmarkNoticeMessage(message))
         .take(80)
         .map((message) => {
               'role': message.role == 'assistant' ? 'assistant' : 'user',
@@ -615,6 +604,16 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
           extraUserInstruction.trim().isNotEmpty)
         {'role': 'user', 'content': extraUserInstruction.trim()},
     ];
+  }
+
+  bool _isBookmarkNoticeMessage(ChatMessage message) {
+    if (message.role != 'assistant') return false;
+    final content = message.content.trim();
+    return content.contains('书签') &&
+        (content.contains('图书馆') ||
+            content.contains('收进') ||
+            content.contains('夹进') ||
+            content.contains('收好'));
   }
 
   void _openSettings() {
@@ -657,6 +656,20 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
       ];
       html.window.localStorage.remove(kHistoryKey);
     });
+  }
+
+  void _clearConversationStateFromUrl() {
+    if (!Uri.base.queryParameters.containsKey('reset')) return;
+
+    html.window.localStorage.remove(kHistoryKey);
+    html.window.localStorage.remove(kQuickCountKey);
+    html.window.localStorage.remove(kLibraryMemoryKey);
+    html.window.localStorage.remove('witchShelterHistory');
+    html.window.localStorage.remove('witchShelterQuickChoiceCount');
+    html.window.localStorage.remove('witchShelterLibraryMemory');
+    html.window.sessionStorage.clear();
+    html.window.history
+        .replaceState(null, '', '${Uri.base.path}?fresh=clean-start');
   }
 
   void _loadSettings() {
@@ -733,6 +746,21 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     });
   }
 
+  void _jumpToBottomAfterOpen() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_messageScrollController.hasClients) return;
+      _messageScrollController.jumpTo(
+        _messageScrollController.position.maxScrollExtent,
+      );
+      Future<void>.delayed(const Duration(milliseconds: 120), () {
+        if (!_messageScrollController.hasClients) return;
+        _messageScrollController.jumpTo(
+          _messageScrollController.position.maxScrollExtent,
+        );
+      });
+    });
+  }
+
   String _cleanReply(String text) {
     return text
         .replaceAll(RegExp(r'（[^）]*）'), '')
@@ -768,18 +796,14 @@ class SkyLines extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Stack(
       children: [
-        Positioned(left: 34, top: 44, child: MoonMark()),
-        Positioned(right: 42, top: 58, child: StarMark(size: 34)),
+        Positioned(left: 26, top: 44, child: MoonMark()),
+        Positioned(left: 92, top: 182, child: StarMark(size: 22, rotate: true)),
         Positioned(
-            left: 120, top: 145, child: StarMark(size: 22, rotate: true)),
-        Positioned(right: 118, top: 205, child: StarMark(size: 28)),
-        Positioned(left: 290, top: 42, child: StarMark(size: 18, rotate: true)),
-        Positioned(left: 210, top: 102, child: StarMark(size: 16)),
+            left: 44, bottom: 64, child: StarMark(size: 18, rotate: true)),
+        Positioned(right: 34, top: 62, child: StarMark(size: 34)),
         Positioned(
-            right: 242, top: 128, child: StarMark(size: 14, rotate: true)),
-        Positioned(
-            left: 64, bottom: 40, child: StarMark(size: 18, rotate: true)),
-        Positioned(right: 66, bottom: 24, child: StarMark(size: 16)),
+            right: 86, top: 178, child: StarMark(size: 24, rotate: true)),
+        Positioned(right: 48, bottom: 54, child: StarMark(size: 18)),
       ],
     );
   }
@@ -844,9 +868,11 @@ class WitchPortrait extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Image.asset(
-      'reference-princess.jpg',
+      'assets/images/ereta-cropped-display.png',
       fit: BoxFit.contain,
       width: 760,
+      filterQuality: FilterQuality.high,
+      isAntiAlias: true,
     );
   }
 }
@@ -979,12 +1005,7 @@ class DialogueBox extends StatelessWidget {
               Expanded(
                 child: ListView.separated(
                   controller: scrollController,
-                  padding: EdgeInsets.fromLTRB(
-                    22,
-                    selectedBookmarkText.isNotEmpty && !isSending ? 52 : 18,
-                    22,
-                    8,
-                  ),
+                  padding: const EdgeInsets.fromLTRB(22, 18, 22, 8),
                   itemBuilder: (context, index) => MessageView(
                     message: messages[index],
                     onAssistantSelection: onAssistantSelection,
@@ -1009,8 +1030,8 @@ class DialogueBox extends StatelessWidget {
         const Positioned(left: 18, top: -52, child: CoffeeCup()),
         if (selectedBookmarkText.isNotEmpty && !isSending)
           Positioned(
-            right: 12,
-            top: 10,
+            right: 0,
+            top: -52,
             child: BookmarkAction(onTap: onBookmarkSelected),
           ),
         if (isSending)
