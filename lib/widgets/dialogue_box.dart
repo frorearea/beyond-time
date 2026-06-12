@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../models/chat_message.dart';
@@ -38,35 +40,58 @@ class DialogueBox extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        Container(
+        SizedBox(
           width: 920,
-          decoration:
-              BoxDecoration(border: Border.all(color: kWhite), color: kBlack),
-          child: Column(
-            children: [
-              Expanded(
-                child: ListView.separated(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(22, 18, 22, 8),
-                  itemBuilder: (context, index) => MessageView(
-                    message: messages[index],
-                    onAssistantSelection: onAssistantSelection,
-                  ),
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: 10),
-                  itemCount: messages.length,
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: kWhite, width: 1.2),
+              color: kBlack,
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x80FFFFFF),
+                  blurRadius: 7,
+                  spreadRadius: -6,
                 ),
-              ),
-              QuickOptions(
+              ],
+            ),
+            child: Column(
+              children: [
+                Expanded(
+                  child: CustomPaint(
+                    foregroundPainter: DialogueFramePainter(),
+                    child: Column(
+                      children: [
+                        const DialogueTopRule(),
+                        Expanded(
+                          child: ListView.separated(
+                            controller: scrollController,
+                            padding: const EdgeInsets.fromLTRB(28, 16, 28, 12),
+                            itemBuilder: (context, index) => MessageView(
+                              message: messages[index],
+                              onAssistantSelection: onAssistantSelection,
+                            ),
+                            separatorBuilder: (context, index) =>
+                                const SizedBox(height: 11),
+                            itemCount: messages.length,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                QuickOptions(
                   options: quickOptions,
                   disabled: isSending,
-                  onTap: onQuickOption),
-              Composer(
+                  onTap: onQuickOption,
+                ),
+                Composer(
                   inputController: inputController,
                   disabled: isSending,
                   onSend: onSend,
-                  onClear: onClear),
-            ],
+                  onClear: onClear,
+                ),
+              ],
+            ),
           ),
         ),
         const Positioned(left: 18, top: -52, child: CoffeeCup()),
@@ -83,6 +108,82 @@ class DialogueBox extends StatelessWidget {
   }
 }
 
+class DialogueTopRule extends StatelessWidget {
+  const DialogueTopRule({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(24, 12, 24, 0),
+      child: Row(
+        children: [
+          Expanded(child: DecorLine()),
+          SizedBox(width: 10),
+          Text(
+            'Ereta Library Record',
+            style: TextStyle(
+              color: Color(0x66FFFFFF),
+              fontSize: 11,
+              fontFamily: 'CormorantGaramond',
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          SizedBox(width: 10),
+          Expanded(child: DecorLine()),
+        ],
+      ),
+    );
+  }
+}
+
+class DecorLine extends StatelessWidget {
+  const DecorLine({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: const Size(double.infinity, 5),
+      painter: DecorLinePainter(),
+    );
+  }
+}
+
+class DecorLinePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final line = Paint()
+      ..color = const Color(0x66FFFFFF)
+      ..strokeWidth = 1;
+    canvas.drawLine(
+      Offset(0, size.height / 2),
+      Offset(size.width - 8, size.height / 2),
+      line,
+    );
+    canvas.drawCircle(Offset(size.width - 3, size.height / 2), 1.5, line);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class DialogueFramePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final faintLine = Paint()
+      ..color = const Color(0x3DFFFFFF)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+
+    canvas.drawRect(
+      Rect.fromLTWH(8, 8, size.width - 16, size.height - 16),
+      faintLine,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 class MessageView extends StatelessWidget {
   const MessageView({
     super.key,
@@ -96,6 +197,7 @@ class MessageView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isPlayer = message.role == 'user';
+    final content = _displayContent(message.content);
     final style = TextStyle(
       color: kWhite,
       fontSize: isPlayer ? 18 : 19,
@@ -103,16 +205,13 @@ class MessageView extends StatelessWidget {
       fontFamily: isPlayer ? 'Microsoft YaHei' : 'LXGWWenKai',
       fontFamilyFallback: isPlayer
           ? const ['PingFang SC', 'Noto Sans CJK SC', 'SimHei']
-          : const [
-              'Microsoft YaHei',
-              'SimSun',
-            ],
+          : const ['Microsoft YaHei', 'SimSun'],
     );
     if (isPlayer) {
-      return Text('> ${message.content}', style: style);
+      return Text('> $content', style: style);
     }
     return SelectableText(
-      message.content,
+      content,
       style: style,
       cursorColor: kWhite,
       selectionControls: materialTextSelectionControls,
@@ -121,10 +220,17 @@ class MessageView extends StatelessWidget {
           onAssistantSelection('');
           return;
         }
-        final selected = selection.textInside(message.content).trim();
+        final selected = selection.textInside(content).trim();
         onAssistantSelection(selected);
       },
     );
+  }
+
+  String _displayContent(String text) {
+    return text
+        .replaceAll(RegExp(r'<\s*br\s*/?\s*>', caseSensitive: false), '\n')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
   }
 }
 
@@ -221,11 +327,12 @@ class RpgBookmarkPainter extends CustomPainter {
 }
 
 class QuickOptions extends StatelessWidget {
-  const QuickOptions(
-      {super.key,
-      required this.options,
-      required this.disabled,
-      required this.onTap});
+  const QuickOptions({
+    super.key,
+    required this.options,
+    required this.disabled,
+    required this.onTap,
+  });
 
   final List<String> options;
   final bool disabled;
@@ -234,8 +341,9 @@ class QuickOptions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration:
-          const BoxDecoration(border: Border(top: BorderSide(color: kWhite))),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Color(0xCCFFFFFF))),
+      ),
       padding: const EdgeInsets.all(12),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -253,15 +361,17 @@ class QuickOptions extends StatelessWidget {
                   onPressed: disabled ? null : () => onTap(option),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: kWhite,
-                    side: const BorderSide(color: kWhite),
+                    side: const BorderSide(color: Color(0xCCFFFFFF)),
                     shape: const RoundedRectangleBorder(),
                     alignment: Alignment.centerLeft,
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                   ),
-                  child: Text(option,
-                      textAlign: TextAlign.left,
-                      style: const TextStyle(fontSize: 14, height: 1.35)),
+                  child: Text(
+                    option,
+                    textAlign: TextAlign.left,
+                    style: const TextStyle(fontSize: 14, height: 1.35),
+                  ),
                 ),
             ],
           );
@@ -290,8 +400,9 @@ class Composer extends StatelessWidget {
     return SizedBox(
       height: 58,
       child: Container(
-        decoration:
-            const BoxDecoration(border: Border(top: BorderSide(color: kWhite))),
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Color(0xCCFFFFFF))),
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -318,7 +429,9 @@ class Composer extends StatelessWidget {
               ),
             ),
             BorderTextButton(
-                label: disabled ? '等待' : '发送', onTap: disabled ? null : onSend),
+              label: disabled ? '等待' : '发送',
+              onTap: disabled ? null : onSend,
+            ),
             BorderTextButton(label: '清空', onTap: onClear),
           ],
         ),
@@ -340,27 +453,66 @@ class BorderTextButton extends StatelessWidget {
       child: Container(
         alignment: Alignment.center,
         decoration: const BoxDecoration(
-            border: Border(left: BorderSide(color: kWhite))),
+          border: Border(left: BorderSide(color: Color(0xCCFFFFFF))),
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 14),
-        child: Text(label,
-            style: TextStyle(
-                color: onTap == null ? const Color(0x73FFFFFF) : kWhite,
-                fontSize: 16)),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: onTap == null ? const Color(0x73FFFFFF) : kWhite,
+            fontSize: 16,
+          ),
+        ),
       ),
     );
   }
 }
 
-class CoffeeCup extends StatelessWidget {
+class CoffeeCup extends StatefulWidget {
   const CoffeeCup({super.key});
 
   @override
+  State<CoffeeCup> createState() => _CoffeeCupState();
+}
+
+class _CoffeeCupState extends State<CoffeeCup>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _steamController;
+
+  @override
+  void initState() {
+    super.initState();
+    _steamController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 5600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _steamController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return CustomPaint(size: const Size(64, 46), painter: CoffeeCupPainter());
+    return AnimatedBuilder(
+      animation: _steamController,
+      builder: (context, child) {
+        return CustomPaint(
+          size: const Size(64, 46),
+          painter: CoffeeCupPainter(_steamController.value),
+        );
+      },
+    );
   }
 }
 
 class CoffeeCupPainter extends CustomPainter {
+  const CoffeeCupPainter(this.progress);
+
+  final double progress;
+
   @override
   void paint(Canvas canvas, Size size) {
     final line = Paint()
@@ -370,13 +522,32 @@ class CoffeeCupPainter extends CustomPainter {
     canvas.drawRect(const Rect.fromLTWH(10, 16, 34, 22), line);
     canvas.drawArc(const Rect.fromLTWH(42, 21, 14, 12), -1.5, 3.0, false, line);
     canvas.drawLine(const Offset(4, 43), const Offset(56, 43), line);
-    canvas.drawArc(const Rect.fromLTWH(16, 0, 8, 16), 2, 2.4, false, line);
-    canvas.drawArc(const Rect.fromLTWH(27, 0, 8, 16), 2, 2.4, false, line);
-    canvas.drawArc(const Rect.fromLTWH(38, 0, 8, 16), 2, 2.4, false, line);
+
+    const activePortion = 0.45;
+    if (progress > activePortion) return;
+
+    final steamProgress = progress / activePortion;
+    final rise = steamProgress * 13;
+    final opacity = steamProgress < 0.18
+        ? steamProgress / 0.18
+        : steamProgress > 0.58
+            ? math.max(0.0, (1 - steamProgress) / 0.42)
+            : 1.0;
+    for (var i = 0; i < 3; i++) {
+      final x = 19.0 + i * 11.0;
+      final steam = Paint()
+        ..color = kWhite.withValues(alpha: 0.18 + opacity * 0.62)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..strokeCap = StrokeCap.round;
+      final rect = Rect.fromLTWH(x - 4, 4 - rise - i * 0.35, 8, 15);
+      canvas.drawArc(rect, 2.05, 2.2, false, steam);
+    }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CoffeeCupPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
 
 class WritingIndicator extends StatelessWidget {
@@ -385,7 +556,9 @@ class WritingIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-        size: const Size(76, 30), painter: WritingIndicatorPainter());
+      size: const Size(76, 30),
+      painter: WritingIndicatorPainter(),
+    );
   }
 }
 

@@ -1,16 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
 import '../config.dart';
 import '../data/quick_options.dart';
 import '../models/chat_message.dart';
+import '../models/library_memory_item.dart';
+import '../services/chat_api.dart';
+import '../services/local_store.dart';
 import '../theme.dart';
 import '../widgets/dialogue_box.dart';
+import '../widgets/memory_panel.dart';
 import '../widgets/settings_panel.dart';
 import '../widgets/stage_decor.dart';
 
@@ -27,6 +29,8 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   final TextEditingController _apiUrlController = TextEditingController();
   final TextEditingController _modelController = TextEditingController();
   final ScrollController _messageScrollController = ScrollController();
+  final ChatApiClient _chatApi = ChatApiClient();
+  final LocalStore _store = LocalStore();
 
   List<ChatMessage> _messages = const [
     ChatMessage(role: 'assistant', content: '进来吧。这里暂时只有黑暗、我、还有你可以慢慢放下的声音。'),
@@ -36,13 +40,14 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   String _musicMode = '8bit';
   String _persona = kFallbackPersona;
   String _selectedBookmarkText = '';
-  List<String> _libraryMemory = const [];
+  List<LibraryMemoryItem> _libraryMemory = const [];
   int _quickChoiceCount = 0;
+  int _memoryCaptureCooldown = 0;
+  bool _isMemoryCaptureRunning = false;
 
   @override
   void initState() {
     super.initState();
-    _clearConversationStateFromUrl();
     _loadPersona();
     _loadSettings();
     _loadHistory();
@@ -136,6 +141,11 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
                     right: isNarrow ? 16 : 22,
                     child: TopTextButton(label: '设置', onTap: _openSettings),
                   ),
+                  Positioned(
+                    top: isNarrow ? 18 : 18,
+                    right: isNarrow ? 68 : 76,
+                    child: TopTextButton(label: '记忆', onTap: _openMemoryPanel),
+                  ),
                 ],
               );
             },
@@ -206,8 +216,17 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     if (quote.isEmpty) return;
 
     setState(() {
-      if (!_libraryMemory.contains(quote)) {
-        _libraryMemory = [..._libraryMemory, quote];
+      if (!_libraryMemory.any((memory) => memory.content == quote)) {
+        _libraryMemory = [
+          ..._libraryMemory,
+          LibraryMemoryItem(
+            category: '书签',
+            content: quote,
+            evidence: '来访者手动收藏的句子',
+            source: '手动书签',
+            createdAt: DateTime.now().toIso8601String(),
+          ),
+        ];
         _saveLibraryMemory();
       }
       _selectedBookmarkText = '';
@@ -261,6 +280,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
       setState(() => _isSending = false);
       _saveHistory();
       _scrollToBottom();
+      unawaited(_maybeCaptureMemory(userText: text, assistantReply: reply));
     } catch (error) {
       _replaceLastAssistant('连接没有成功：$error');
       setState(() => _isSending = false);
@@ -284,46 +304,19 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     final apiUrl = _apiUrlController.text.trim().isEmpty
         ? kDefaultApiUrl
         : _apiUrlController.text.trim();
-    final client = HttpClient();
-    var eventBuffer = '';
-    var reply = '';
+
     try {
-      final request = await client.postUrl(Uri.parse(apiUrl));
-      request.headers.contentType = ContentType.json;
-      request.headers.set(HttpHeaders.acceptHeader, 'text/event-stream');
-      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $apiKey');
-      request.write(jsonEncode(payload));
-      final response = await request.close();
-
-      if (response.statusCode != 200) {
-        final text = await response.transform(utf8.decoder).join();
-        throw _friendlyHttpError(response.statusCode, text);
-      }
-
-      await for (final chunk in response.transform(utf8.decoder)) {
-        eventBuffer += chunk;
-        final events = eventBuffer.split('\n\n');
-        eventBuffer = events.removeLast();
-        for (final event in events) {
-          final delta = _sseDelta(event);
-          if (delta.isEmpty) continue;
-          reply += delta;
-          _replaceLastAssistant(reply);
+      return await _chatApi.requestStreamingReply(
+        payload: payload,
+        apiKey: apiKey,
+        apiUrl: apiUrl,
+        onReply: (reply) {
+          _replaceLastAssistant(_cleanReply(reply));
           _scrollToBottom();
-        }
-      }
-
-      if (eventBuffer.trim().isNotEmpty) {
-        final delta = _sseDelta(eventBuffer);
-        if (delta.isNotEmpty) {
-          reply += delta;
-          _replaceLastAssistant(reply);
-        }
-      }
-
-      return reply.isEmpty ? '模型没有返回内容。' : reply;
-    } finally {
-      client.close(force: true);
+        },
+      );
+    } on ChatApiException catch (error) {
+      throw _friendlyHttpError(error.statusCode, error.responseText);
     }
   }
 
@@ -366,31 +359,6 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     return '';
   }
 
-  String _sseDelta(String event) {
-    final lines = event.split('\n');
-    final dataLines = lines
-        .where((line) => line.startsWith('data:'))
-        .map((line) => line.substring(5).trim())
-        .where((line) => line.isNotEmpty && line != '[DONE]');
-    final buffer = StringBuffer();
-    for (final line in dataLines) {
-      try {
-        final decoded = jsonDecode(line) as Map<String, dynamic>;
-        final choices = decoded['choices'];
-        if (choices is! List || choices.isEmpty) continue;
-        final choice = choices.first;
-        if (choice is! Map<String, dynamic>) continue;
-        final delta = choice['delta'];
-        if (delta is! Map<String, dynamic>) continue;
-        final content = delta['content'];
-        if (content is String) buffer.write(content);
-      } catch (_) {
-        continue;
-      }
-    }
-    return buffer.toString();
-  }
-
   void _replaceLastAssistant(String content) {
     if (!mounted || _messages.isEmpty) return;
     setState(() {
@@ -411,7 +379,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
             })
         .toList();
     final memories = _libraryMemory
-        .where((memory) => memory.trim().isNotEmpty)
+        .where((memory) => memory.content.trim().isNotEmpty)
         .toList()
         .reversed
         .take(12)
@@ -425,17 +393,161 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
         {
           'role': 'system',
           'content':
-              '以下是来访者主动收藏进图书馆记忆的句子。把它们当作轻柔背景，只在自然合适时呼应，不要像系统总结一样复述：\n${memories.map((memory) => '- $memory').join('\n')}',
+              '以下是图书馆记忆，包含来访者手动收藏的句子，以及艾蕾塔谨慎整理出的喜好、压力、热爱与困扰。把它们当作轻柔背景，只在自然合适时呼应，不要像系统总结一样复述：\n${memories.map((memory) => '- [${memory.category}] ${memory.content}${memory.evidence.trim().isEmpty ? '' : '（依据：${memory.evidence}）'}').join('\n')}',
         },
       {
         'role': 'system',
-        'content': '保持短句、对话感和爱蕾塔的角色气质。优先回应来访者当前这句话，不要被旧上下文牵走。',
+        'content':
+            '保持对话感和艾蕾塔的角色气质。优先自然回应来访者当前这句话，不要输出 HTML 标签或 Markdown 换行标签；需要换行时直接使用普通换行，绝对不要写 <br>。',
       },
       ...history,
       if (extraUserInstruction != null &&
           extraUserInstruction.trim().isNotEmpty)
         {'role': 'user', 'content': extraUserInstruction.trim()},
     ];
+  }
+
+  Future<void> _maybeCaptureMemory({
+    required String userText,
+    required String assistantReply,
+  }) async {
+    final compactUserText = userText.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (compactUserText.length < 12) return;
+    if (_apiKeyController.text.trim().isEmpty) return;
+    if (_isMemoryCaptureRunning) return;
+    if (_memoryCaptureCooldown > 0) {
+      _memoryCaptureCooldown -= 1;
+      return;
+    }
+
+    _isMemoryCaptureRunning = true;
+    try {
+      final raw = await _chatApi.requestStreamingReply(
+        payload: {
+          'model': _modelController.text.trim().isEmpty
+              ? kDefaultModel
+              : _modelController.text.trim(),
+          'messages': [
+            {
+              'role': 'system',
+              'content':
+                  '你是艾蕾塔的图书馆记忆整理员。你的任务不是聊天，而是判断来访者刚才的话是否值得长期记住。只记录稳定、具体、有情感重量的信息：喜好、压力源、热爱、困扰、创作计划、长期自我理解。不要记录简单问候、临时问题、一次性作品问答、艾蕾塔自己的话、过于普通或可从上下文轻易推断的信息。不要频繁记录；宁可少记，也不要把图书馆变成流水账。称呼对方时只用“来访者”，不要写“用户”。只输出 JSON，不要输出解释。',
+            },
+            {
+              'role': 'user',
+              'content': '''
+现有记忆：
+${_memoryDigestForAnalyzer()}
+
+最近这轮对话：
+来访者：$compactUserText
+艾蕾塔：${assistantReply.replaceAll(RegExp(r'\s+'), ' ').trim()}
+
+请判断是否需要新增一条记忆。只输出如下 JSON：
+{
+  "shouldRemember": true 或 false,
+  "category": "喜好/压力/热爱/困扰/创作/关系/自我理解/其他",
+  "memory": "一条不超过45字的记忆，用第三人称描述来访者，不要出现“用户”二字",
+  "evidence": "最短的来访者原话依据",
+  "confidence": 0.0 到 1.0
+}
+''',
+            },
+          ],
+          'temperature': 0.15,
+          'max_tokens': 260,
+          'stream': true,
+          'stream_options': {'include_usage': false},
+        },
+        apiKey: _apiKeyController.text.trim(),
+        apiUrl: _apiUrlController.text.trim().isEmpty
+            ? kDefaultApiUrl
+            : _apiUrlController.text.trim(),
+        onReply: (_) {},
+      );
+
+      final memory = _parseMemoryCandidate(raw);
+      if (memory == null || _hasSimilarMemory(memory.content)) {
+        _memoryCaptureCooldown = 1;
+        return;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        final next = [..._libraryMemory, memory];
+        _libraryMemory =
+            next.length > 32 ? next.sublist(next.length - 32) : next;
+      });
+      _saveLibraryMemory();
+      _memoryCaptureCooldown = 2;
+    } catch (_) {
+      _memoryCaptureCooldown = 1;
+    } finally {
+      _isMemoryCaptureRunning = false;
+    }
+  }
+
+  String _memoryDigestForAnalyzer() {
+    final memories = _libraryMemory
+        .where((memory) => memory.source != '手动书签')
+        .toList()
+        .reversed
+        .take(10)
+        .toList()
+        .reversed;
+    if (memories.isEmpty) return '无';
+    return memories
+        .map((memory) => '- [${memory.category}] ${memory.content}')
+        .join('\n');
+  }
+
+  LibraryMemoryItem? _parseMemoryCandidate(String raw) {
+    final jsonText = _extractJsonObject(raw);
+    if (jsonText == null) return null;
+    try {
+      final data = jsonDecode(jsonText) as Map<String, dynamic>;
+      if (data['shouldRemember'] != true) return null;
+      final confidence = double.tryParse(data['confidence'].toString()) ?? 0;
+      if (confidence < 0.62) return null;
+      final content = data['memory']?.toString().trim() ?? '';
+      if (content.length < 8) return null;
+      final evidence = data['evidence']?.toString().trim() ?? '';
+      final category = data['category']?.toString().trim().isNotEmpty == true
+          ? data['category'].toString().trim()
+          : '记忆';
+      return LibraryMemoryItem(
+        category: category,
+        content:
+            content.length > 80 ? '${content.substring(0, 80)}...' : content,
+        evidence:
+            evidence.length > 80 ? '${evidence.substring(0, 80)}...' : evidence,
+        source: '艾蕾塔整理',
+        createdAt: DateTime.now().toIso8601String(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _extractJsonObject(String raw) {
+    final cleaned = raw
+        .replaceAll(RegExp(r'```json\s*', caseSensitive: false), '')
+        .replaceAll('```', '')
+        .trim();
+    final start = cleaned.indexOf('{');
+    final end = cleaned.lastIndexOf('}');
+    if (start < 0 || end <= start) return null;
+    return cleaned.substring(start, end + 1);
+  }
+
+  bool _hasSimilarMemory(String content) {
+    final compact = content.replaceAll(RegExp(r'\s+'), '');
+    return _libraryMemory.any((memory) {
+      final existing = memory.content.replaceAll(RegExp(r'\s+'), '');
+      return existing == compact ||
+          existing.contains(compact) ||
+          compact.contains(existing);
+    });
   }
 
   bool _isBookmarkNoticeMessage(ChatMessage message) {
@@ -479,6 +591,21 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     );
   }
 
+  void _openMemoryPanel() {
+    showGeneralDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.78),
+      barrierDismissible: true,
+      barrierLabel: '关闭记忆',
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return Align(
+          alignment: Alignment.centerRight,
+          child: MemoryPanel(memories: _libraryMemory),
+        );
+      },
+    );
+  }
+
   void _clearChat() {
     setState(() {
       _selectedBookmarkText = '';
@@ -489,8 +616,6 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
       _deleteStoreFile(kHistoryKey);
     });
   }
-
-  void _clearConversationStateFromUrl() {}
 
   void _loadSettings() {
     final raw = _readStore(kSettingsKey);
@@ -537,9 +662,13 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     try {
       final data = jsonDecode(raw) as List<dynamic>;
       _libraryMemory = data
-          .map((item) => item.toString().trim())
-          .where((item) => item.isNotEmpty)
-          .toSet()
+          .map((item) {
+            if (item is Map<String, dynamic>) {
+              return LibraryMemoryItem.fromJson(item);
+            }
+            return LibraryMemoryItem.fromLegacyString(item.toString());
+          })
+          .where((item) => item.content.trim().isNotEmpty)
           .toList();
     } catch (_) {
       _libraryMemory = const [];
@@ -554,52 +683,21 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   }
 
   void _saveLibraryMemory() {
-    _writeStore(kLibraryMemoryKey, jsonEncode(_libraryMemory));
+    _writeStore(
+      kLibraryMemoryKey,
+      jsonEncode(_libraryMemory.map((memory) => memory.toJson()).toList()),
+    );
   }
 
   void _saveQuickChoiceCount() {
     _writeStore(kQuickCountKey, _quickChoiceCount.toString());
   }
 
-  File _storeFile(String key) {
-    final basePath = Platform.environment['APPDATA'] ??
-        Platform.environment['LOCALAPPDATA'] ??
-        Directory.current.path;
-    final directory = Directory('$basePath\\BeyondTime');
-    if (!directory.existsSync()) {
-      directory.createSync(recursive: true);
-    }
-    final safeKey = key.replaceAll(RegExp(r'[^A-Za-z0-9_.-]'), '_');
-    return File('${directory.path}\\$safeKey.json');
-  }
+  String? _readStore(String key) => _store.read(key);
 
-  String? _readStore(String key) {
-    try {
-      final file = _storeFile(key);
-      if (!file.existsSync()) return null;
-      return file.readAsStringSync();
-    } catch (_) {
-      return null;
-    }
-  }
+  void _writeStore(String key, String value) => _store.write(key, value);
 
-  void _writeStore(String key, String value) {
-    try {
-      _storeFile(key).writeAsStringSync(value);
-    } catch (_) {
-      // Local persistence is helpful, but the app should remain usable without it.
-    }
-  }
-
-  void _deleteStoreFile(String key) {
-    try {
-      final file = _storeFile(key);
-      if (file.existsSync()) file.deleteSync();
-    } catch (_) {
-      // Ignore local cleanup failures.
-    }
-  }
-
+  void _deleteStoreFile(String key) => _store.delete(key);
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_messageScrollController.hasClients) return;
@@ -628,10 +726,12 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
 
   String _cleanReply(String text) {
     return text
+        .replaceAll(RegExp(r'<\s*br\s*/?\s*>', caseSensitive: false), '\n')
         .replaceAll(RegExp(r'（[^）]*）'), '')
         .replaceAll(RegExp(r'\([^)]*\)'), '')
         .replaceAll('“', '')
         .replaceAll('”', '')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
         .trim();
   }
 }
