@@ -1,39 +1,122 @@
+import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' show BoxHeightStyle, BoxWidthStyle;
 
 import 'package:flutter/material.dart';
 
 import '../models/chat_message.dart';
 import '../theme.dart';
 
-class DialogueBox extends StatelessWidget {
+class DialogueBox extends StatefulWidget {
   const DialogueBox({
     super.key,
     required this.messages,
     required this.isSending,
-    required this.musicMode,
     required this.quickOptions,
     required this.inputController,
     required this.scrollController,
-    required this.selectedBookmarkText,
     required this.onSend,
     required this.onClear,
     required this.onQuickOption,
-    required this.onAssistantSelection,
+    required this.onRefreshQuickOptions,
     required this.onBookmarkSelected,
   });
 
   final List<ChatMessage> messages;
   final bool isSending;
-  final String musicMode;
   final List<String> quickOptions;
   final TextEditingController inputController;
   final ScrollController scrollController;
-  final String selectedBookmarkText;
   final Future<void> Function() onSend;
   final VoidCallback onClear;
   final ValueChanged<String> onQuickOption;
-  final ValueChanged<String> onAssistantSelection;
-  final VoidCallback onBookmarkSelected;
+  final VoidCallback onRefreshQuickOptions;
+  final ValueChanged<String> onBookmarkSelected;
+
+  @override
+  State<DialogueBox> createState() => _DialogueBoxState();
+}
+
+class _DialogueBoxState extends State<DialogueBox> {
+  final ValueNotifier<String> _selectedBookmarkText = ValueNotifier('');
+  final GlobalKey _boxKey = GlobalKey();
+  OverlayEntry? _bookmarkOverlay;
+  Timer? _selectionClearTimer;
+
+  @override
+  void dispose() {
+    _selectionClearTimer?.cancel();
+    _removeBookmarkOverlay();
+    _selectedBookmarkText.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant DialogueBox oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isSending && !oldWidget.isSending) {
+      _removeBookmarkOverlay();
+    }
+  }
+
+  void _handleAssistantSelection(String text) {
+    if (text.trim().isEmpty) {
+      _scheduleBookmarkOverlayRemoval();
+      return;
+    }
+    _selectionClearTimer?.cancel();
+    if (_selectedBookmarkText.value == text) return;
+    _selectedBookmarkText.value = text;
+    _showBookmarkOverlay();
+  }
+
+  void _bookmarkSelectedText() {
+    _selectionClearTimer?.cancel();
+    final selected = _selectedBookmarkText.value.trim();
+    if (selected.isEmpty) return;
+    _selectedBookmarkText.value = '';
+    _removeBookmarkOverlay();
+    widget.onBookmarkSelected(selected);
+  }
+
+  void _showBookmarkOverlay() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || widget.isSending || _selectedBookmarkText.value.isEmpty) {
+        return;
+      }
+      final renderBox =
+          _boxKey.currentContext?.findRenderObject() as RenderBox?;
+      final overlay = Overlay.of(context);
+      if (renderBox == null) return;
+      final offset = renderBox.localToGlobal(Offset.zero);
+      final size = renderBox.size;
+      _removeBookmarkOverlay();
+      _bookmarkOverlay = OverlayEntry(
+        builder: (context) {
+          return Positioned(
+            left: offset.dx + size.width - 118,
+            top: offset.dy - 52,
+            child: BookmarkAction(onTap: _bookmarkSelectedText),
+          );
+        },
+      );
+      overlay.insert(_bookmarkOverlay!);
+    });
+  }
+
+  void _scheduleBookmarkOverlayRemoval() {
+    _selectionClearTimer?.cancel();
+    _selectionClearTimer = Timer(const Duration(milliseconds: 260), () {
+      if (!mounted) return;
+      _selectedBookmarkText.value = '';
+      _removeBookmarkOverlay();
+    });
+  }
+
+  void _removeBookmarkOverlay() {
+    _bookmarkOverlay?.remove();
+    _bookmarkOverlay = null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +124,7 @@ class DialogueBox extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         SizedBox(
+          key: _boxKey,
           width: 920,
           child: Container(
             decoration: BoxDecoration(
@@ -64,15 +148,15 @@ class DialogueBox extends StatelessWidget {
                         const DialogueTopRule(),
                         Expanded(
                           child: ListView.separated(
-                            controller: scrollController,
+                            controller: widget.scrollController,
                             padding: const EdgeInsets.fromLTRB(28, 16, 28, 12),
                             itemBuilder: (context, index) => MessageView(
-                              message: messages[index],
-                              onAssistantSelection: onAssistantSelection,
+                              message: widget.messages[index],
+                              onAssistantSelection: _handleAssistantSelection,
                             ),
                             separatorBuilder: (context, index) =>
                                 const SizedBox(height: 11),
-                            itemCount: messages.length,
+                            itemCount: widget.messages.length,
                           ),
                         ),
                       ],
@@ -80,28 +164,23 @@ class DialogueBox extends StatelessWidget {
                   ),
                 ),
                 QuickOptions(
-                  options: quickOptions,
-                  disabled: isSending,
-                  onTap: onQuickOption,
+                  options: widget.quickOptions,
+                  disabled: widget.isSending,
+                  onTap: widget.onQuickOption,
+                  onRefresh: widget.onRefreshQuickOptions,
                 ),
                 Composer(
-                  inputController: inputController,
-                  disabled: isSending,
-                  onSend: onSend,
-                  onClear: onClear,
+                  inputController: widget.inputController,
+                  disabled: widget.isSending,
+                  onSend: widget.onSend,
+                  onClear: widget.onClear,
                 ),
               ],
             ),
           ),
         ),
         const Positioned(left: 18, top: -52, child: CoffeeCup()),
-        if (selectedBookmarkText.isNotEmpty && !isSending)
-          Positioned(
-            right: 0,
-            top: -52,
-            child: BookmarkAction(onTap: onBookmarkSelected),
-          ),
-        if (isSending)
+        if (widget.isSending)
           const Positioned(right: 18, top: -42, child: WritingIndicator()),
       ],
     );
@@ -210,19 +289,32 @@ class MessageView extends StatelessWidget {
     if (isPlayer) {
       return Text('> $content', style: style);
     }
-    return SelectableText(
-      content,
-      style: style,
-      cursorColor: kWhite,
-      selectionControls: materialTextSelectionControls,
-      onSelectionChanged: (selection, cause) {
-        if (selection.isCollapsed) {
-          onAssistantSelection('');
-          return;
-        }
-        final selected = selection.textInside(content).trim();
-        onAssistantSelection(selected);
-      },
+    return TextSelectionTheme(
+      data: const TextSelectionThemeData(
+        cursorColor: kWhite,
+        selectionColor: Color(0x4DFFFFFF),
+        selectionHandleColor: kWhite,
+      ),
+      child: SelectableText(
+        content,
+        style: style,
+        cursorColor: kWhite,
+        selectionHeightStyle: BoxHeightStyle.tight,
+        selectionWidthStyle: BoxWidthStyle.tight,
+        selectionControls: materialTextSelectionControls,
+        onSelectionChanged: (selection, cause) {
+          if (selection.isCollapsed) {
+            onAssistantSelection('');
+            return;
+          }
+          final selected = selection.textInside(content).trim();
+          if (selected.isEmpty) {
+            onAssistantSelection('');
+            return;
+          }
+          onAssistantSelection(selected);
+        },
+      ),
     );
   }
 
@@ -332,11 +424,13 @@ class QuickOptions extends StatelessWidget {
     required this.options,
     required this.disabled,
     required this.onTap,
+    required this.onRefresh,
   });
 
   final List<String> options;
   final bool disabled;
   final ValueChanged<String> onTap;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -347,35 +441,112 @@ class QuickOptions extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final columns = constraints.maxWidth < 650 ? 1 : 3;
-          return GridView.count(
-            crossAxisCount: columns,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            childAspectRatio: columns == 1 ? 8 : 5.7,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            children: [
-              for (final option in options)
-                OutlinedButton(
-                  onPressed: disabled ? null : () => onTap(option),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: kWhite,
-                    side: const BorderSide(color: Color(0xCCFFFFFF)),
-                    shape: const RoundedRectangleBorder(),
-                    alignment: Alignment.centerLeft,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          if (constraints.maxWidth < 650) {
+            return GridView.count(
+              crossAxisCount: 1,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+              childAspectRatio: 8,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                for (final option in options)
+                  _QuickOptionButton(
+                    label: option,
+                    disabled: disabled,
+                    onTap: () => onTap(option),
                   ),
-                  child: Text(
-                    option,
-                    textAlign: TextAlign.left,
-                    style: const TextStyle(fontSize: 14, height: 1.35),
+                _RefreshOptionsButton(disabled: disabled, onTap: onRefresh),
+              ],
+            );
+          }
+
+          return SizedBox(
+            height: 48,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final option in options) ...[
+                  Expanded(
+                    child: _QuickOptionButton(
+                      label: option,
+                      disabled: disabled,
+                      onTap: () => onTap(option),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                SizedBox(
+                  width: 78,
+                  child: _RefreshOptionsButton(
+                    disabled: disabled,
+                    onTap: onRefresh,
                   ),
                 ),
-            ],
+              ],
+            ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _QuickOptionButton extends StatelessWidget {
+  const _QuickOptionButton({
+    required this.label,
+    required this.disabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool disabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: disabled ? null : onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: kWhite,
+        side: const BorderSide(color: Color(0xCCFFFFFF)),
+        shape: const RoundedRectangleBorder(),
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      ),
+      child: Text(
+        label,
+        textAlign: TextAlign.left,
+        style: const TextStyle(fontSize: 14, height: 1.35),
+      ),
+    );
+  }
+}
+
+class _RefreshOptionsButton extends StatelessWidget {
+  const _RefreshOptionsButton({
+    required this.disabled,
+    required this.onTap,
+  });
+
+  final bool disabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: disabled ? null : onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: kWhite,
+        side: const BorderSide(color: Color(0x99FFFFFF)),
+        shape: const RoundedRectangleBorder(),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+      ),
+      child: const Text(
+        '换一组',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 13, height: 1.15),
       ),
     );
   }

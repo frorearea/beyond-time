@@ -13,11 +13,12 @@
 - 纯文本对话框
 - DeepSeek Chat Completions API 后端代理
 - 流式回复与打字机显示
-- 可编辑角色 Prompt
+- 独立角色 Prompt 文件
 - 心声选项与自由输入并存
-- 舒缓 8bit / 16bit 背景音乐
+- 图书馆记忆、书签收藏与存档导入导出
+- 塔罗占卜入口（记忆足够后出现）
 - 内置英文字体与中文文楷字体
-- 本地浏览器保存 API Key、模型和 Prompt
+- 本地浏览器保存 API Key、模型与对话记录
 
 ## 本地运行
 
@@ -40,9 +41,9 @@ http://localhost:4173
 - `API Key`：DeepSeek 或兼容 OpenAI Chat Completions 的密钥
 - `API 地址`：默认 `https://api.deepseek.com/chat/completions`
 - `模型`：默认 `deepseek-v4-flash`
-- `人设 Prompt`：艾蕾塔的人设与对话规则
+- `人设 Prompt`：这里不允许偷窥魔女的秘密。真正的人设文件在项目目录中维护
 
-目前设置保存在浏览器 `localStorage` 中。若部署到公网，建议改成服务端环境变量或账号级配置，避免前端暴露密钥。
+目前设置、对话、记忆和书签保存在浏览器 `localStorage` 中，也可以通过 `存档` 面板导出备份。若部署到公网，建议改成服务端环境变量或账号级配置，避免前端暴露密钥。
 
 ## 角色方向
 
@@ -57,6 +58,12 @@ assets/prompts/ereta_persona.txt
 ```
 
 修改这个文件后，重新构建 Flutter Web 页面即可生效。
+
+未参与打包的大图原始素材保留在：
+
+```text
+assets/source/images
+```
 
 ## 后续想做
 

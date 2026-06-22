@@ -4,9 +4,18 @@ import '../models/library_memory_item.dart';
 import '../theme.dart';
 
 class MemoryPanel extends StatelessWidget {
-  const MemoryPanel({super.key, required this.memories});
+  const MemoryPanel({
+    super.key,
+    required this.memories,
+    this.title = '图书馆记忆',
+    this.description = '艾蕾塔只记录足够重要的喜好、压力、热爱与困扰。',
+    this.emptyText = '书页还是空的。',
+  });
 
   final List<LibraryMemoryItem> memories;
+  final String title;
+  final String description;
+  final String emptyText;
 
   @override
   Widget build(BuildContext context) {
@@ -25,9 +34,9 @@ class MemoryPanel extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  '图书馆记忆',
-                  style: TextStyle(color: kWhite, fontSize: 18),
+                Text(
+                  title,
+                  style: const TextStyle(color: kWhite, fontSize: 18),
                 ),
                 OutlinedButton(
                   onPressed: () => Navigator.of(context).pop(),
@@ -36,17 +45,17 @@ class MemoryPanel extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            const Text(
-              '艾蕾塔只记录足够重要的喜好、压力、热爱与困扰。',
-              style: TextStyle(color: Color(0x99FFFFFF), fontSize: 12),
+            Text(
+              description,
+              style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 12),
             ),
             const SizedBox(height: 20),
             Expanded(
               child: memories.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Text(
-                        '书页还是空的。',
-                        style: TextStyle(color: Color(0x99FFFFFF)),
+                        emptyText,
+                        style: const TextStyle(color: Color(0x99FFFFFF)),
                       ),
                     )
                   : ListView.separated(
