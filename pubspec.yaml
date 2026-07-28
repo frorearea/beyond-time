@@ -23,6 +23,3 @@ flutter:
     - family: CormorantGaramond
       fonts:
         - asset: assets/fonts/CormorantGaramond-Italic.ttf
-    - family: LXGWWenKai
-      fonts:
-        - asset: assets/fonts/LXGWWenKai-Regular.ttf
