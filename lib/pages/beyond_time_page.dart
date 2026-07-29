@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
@@ -12,15 +11,20 @@ import '../services/archive_service.dart';
 import '../services/bookmark_service.dart';
 import '../services/chat_api.dart';
 import '../services/conversation_context.dart';
+import '../services/error_helper.dart';
 import '../services/local_store.dart';
 import '../services/memory_capture_service.dart';
+import '../services/store_helper.dart';
 import '../services/tarot_reading_service.dart';
 import '../theme.dart';
 import '../widgets/archive_panel.dart';
+import '../widgets/candle_glow.dart';
 import '../widgets/dialogue_box.dart';
 import '../widgets/memory_panel.dart';
 import '../widgets/settings_panel.dart';
+import '../widgets/sound_control.dart';
 import '../widgets/stage_decor.dart';
+import '../widgets/storybook_frame.dart';
 
 class BeyondTimePage extends StatefulWidget {
   const BeyondTimePage({super.key});
@@ -39,7 +43,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   final BookmarkService _bookmarkService = const BookmarkService();
   final ChatApiClient _chatApi = ChatApiClient();
   final ConversationContext _conversationContext = const ConversationContext();
-  final LocalStore _store = LocalStore();
+  final StoreHelper _storeHelper = StoreHelper(LocalStore());
   final TarotReadingService _tarotReadingService = const TarotReadingService();
   late final MemoryCaptureService _memoryCaptureService =
       MemoryCaptureService(_chatApi);
@@ -53,6 +57,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   int _quickOptionPoolIndex = 0;
   int _memoryCaptureCooldown = 0;
   bool _isMemoryCaptureRunning = false;
+  String _uiLayout = 'classic';
 
   @override
   void initState() {
@@ -78,84 +83,217 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kBlack,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-              maxWidth: kStageMaxWidth, maxHeight: kStageMaxHeight),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final isNarrow = constraints.maxWidth < 700;
-              final dialogueHeight = constraints.maxHeight * 0.50;
-              return Stack(
-                children: [
-                  Positioned.fill(
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(isNarrow ? 12 : 22,
-                          isNarrow ? 52 : 28, isNarrow ? 12 : 22, 24),
-                      child: Column(
-                        children: [
-                          Expanded(
-                            child: Stack(
-                              alignment: Alignment.bottomCenter,
-                              children: const [
-                                Positioned.fill(child: SkyLines()),
-                                Padding(
-                                  padding: EdgeInsets.only(bottom: 8),
-                                  child: WitchPortrait(),
+      body: _uiLayout == 'storybook'
+          ? _buildStorybookLayout()
+          : Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                    maxWidth: kStageMaxWidth, maxHeight: kStageMaxHeight),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isNarrow = constraints.maxWidth < 700;
+                    final dialogueHeight = constraints.maxHeight * 0.50;
+                    return Stack(
+                      children: [
+                        Positioned.fill(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(isNarrow ? 12 : 22,
+                                isNarrow ? 52 : 28, isNarrow ? 12 : 22, 24),
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  child: Stack(
+                                    alignment: Alignment.bottomCenter,
+                                    children: const [
+                                      Positioned.fill(child: SkyLines()),
+                                      Positioned.fill(child: CandleGlow()),
+                                      Padding(
+                                        padding: EdgeInsets.only(bottom: 8),
+                                        child: WitchPortrait(),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SloganQuote(),
+                                SizedBox(
+                                  height: dialogueHeight,
+                                  child: DialogueBox(
+                                    messages: _messages,
+                                    isSending: _isSending,
+                                    quickOptions: _currentQuickOptions(),
+                                    inputController: _inputController,
+                                    scrollController: _messageScrollController,
+                                    onSend: _sendCurrentText,
+                                    onClear: _clearChat,
+                                    onQuickOption: _handleQuickOption,
+                                    onRefreshQuickOptions: _refreshQuickOptions,
+                                    onBookmarkSelected: _bookmarkSelectedText,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                          const SloganQuote(),
-                          SizedBox(
-                            height: dialogueHeight,
-                            child: DialogueBox(
-                              messages: _messages,
-                              isSending: _isSending,
-                              quickOptions: _currentQuickOptions(),
-                              inputController: _inputController,
-                              scrollController: _messageScrollController,
-                              onSend: _sendCurrentText,
-                              onClear: _clearChat,
-                              onQuickOption: _handleQuickOption,
-                              onRefreshQuickOptions: _refreshQuickOptions,
-                              onBookmarkSelected: _bookmarkSelectedText,
-                            ),
+                        ),
+                        Positioned(
+                          top: isNarrow ? 18 : 18,
+                          left: isNarrow ? 16 : 22,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TopTextButton(
+                                  label: '记忆', onTap: _openMemoryPanel),
+                              if (_canStartTarotReading)
+                                const SizedBox(width: 18),
+                              if (_canStartTarotReading) ...[
+                                TopTextButton(
+                                    label: '占卜', onTap: _startTarotReading),
+                              ],
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: isNarrow ? 18 : 18,
-                    left: isNarrow ? 16 : 22,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TopTextButton(label: '记忆', onTap: _openMemoryPanel),
-                        if (_canStartTarotReading) const SizedBox(width: 18),
-                        if (_canStartTarotReading) ...[
-                          TopTextButton(label: '占卜', onTap: _startTarotReading),
-                        ],
+                        ),
+                        Positioned(
+                          top: isNarrow ? 18 : 18,
+                          right: isNarrow ? 16 : 22,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TopTextButton(
+                                  label: '存档', onTap: _openArchivePanel),
+                              const SizedBox(width: 18),
+                              TopTextButton(label: '设置', onTap: _openSettings),
+                              const SizedBox(width: 18),
+                              const SoundControl(),
+                            ],
+                          ),
+                        ),
                       ],
-                    ),
-                  ),
-                  Positioned(
-                    top: isNarrow ? 18 : 18,
-                    right: isNarrow ? 16 : 22,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TopTextButton(label: '存档', onTap: _openArchivePanel),
-                        const SizedBox(width: 18),
-                        TopTextButton(label: '设置', onTap: _openSettings),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            },
+                    );
+                  },
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget _buildStorybookLayout() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 860;
+        final toolbarIsCompact = constraints.maxWidth < 720;
+        final outerPadding = constraints.maxWidth < 560 ? 6.0 : 14.0;
+
+        final portrait = Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0x70FFFFFF)),
           ),
+          child: StorybookPortraitPanel(showQuote: !isCompact),
+        );
+        final dialogue = DialogueBox(
+          messages: _messages,
+          isSending: _isSending,
+          quickOptions: _currentQuickOptions(),
+          inputController: _inputController,
+          scrollController: _messageScrollController,
+          onSend: _sendCurrentText,
+          onClear: _clearChat,
+          onQuickOption: _handleQuickOption,
+          onRefreshQuickOptions: _refreshQuickOptions,
+          onBookmarkSelected: _bookmarkSelectedText,
+          storybookMode: true,
+        );
+
+        return Padding(
+          padding: EdgeInsets.all(outerPadding),
+          child: StorybookFrame(
+            child: Column(
+              children: [
+                _buildStorybookToolbar(toolbarIsCompact),
+                const Divider(height: 1, color: Color(0x99FFFFFF)),
+                Expanded(
+                  child: isCompact
+                      ? Column(
+                          children: [
+                            Expanded(flex: 3, child: portrait),
+                            const StorybookSpine(vertical: false),
+                            Expanded(flex: 7, child: dialogue),
+                          ],
+                        )
+                      : Row(
+                          children: [
+                            Expanded(child: portrait),
+                            const StorybookSpine(),
+                            Expanded(child: dialogue),
+                          ],
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStorybookToolbar(bool compact) {
+    final leftActions = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TopTextButton(label: '记忆', onTap: _openMemoryPanel),
+        if (_canStartTarotReading) ...[
+          const SizedBox(width: 14),
+          TopTextButton(label: '占卜', onTap: _startTarotReading),
+        ],
+      ],
+    );
+    final rightActions = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TopTextButton(label: '存档', onTap: _openArchivePanel),
+        const SizedBox(width: 14),
+        TopTextButton(label: '设置', onTap: _openSettings),
+        const SizedBox(width: 14),
+        const SoundControl(),
+      ],
+    );
+
+    if (compact) {
+      return SizedBox(
+        height: 62,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const _StorybookTitle(compact: true),
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  leftActions,
+                  const Spacer(),
+                  rightActions,
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 44,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: [
+            Expanded(
+                child:
+                    Align(alignment: Alignment.centerLeft, child: leftActions)),
+            const _StorybookTitle(),
+            Expanded(
+              child:
+                  Align(alignment: Alignment.centerRight, child: rightActions),
+            ),
+          ],
         ),
       ),
     );
@@ -196,7 +334,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   void _advanceQuickOptions() {
     setState(() {
       _quickOptionPoolIndex += 1;
-      _saveQuickOptionPoolIndex();
+      _storeHelper.saveQuickOptionPoolIndex(_quickOptionPoolIndex);
     });
   }
 
@@ -239,14 +377,14 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     setState(() {
       _libraryMemory = result.memories;
       if (result.added) {
-        _saveLibraryMemory();
+        _storeHelper.saveLibraryMemory(_libraryMemory);
       }
       _messages = [
         ..._messages,
         ChatMessage(role: 'assistant', content: result.notice),
       ];
     });
-    _saveHistory();
+    _storeHelper.saveHistory(_messages);
     _scrollToBottom();
   }
 
@@ -302,7 +440,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
       );
       _replaceLastAssistant(_conversationContext.cleanReply(reply));
       setState(() => _isSending = false);
-      _saveHistory();
+      _storeHelper.saveHistory(_messages);
       _scrollToBottom();
       if (captureMemory) {
         unawaited(_maybeCaptureMemory(userText: text, assistantReply: reply));
@@ -350,7 +488,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
         },
       );
     } on ChatApiException catch (error) {
-      throw _conversationContext.friendlyHttpError(
+      throw friendlyHttpError(
         error.statusCode,
         error.responseText,
       );
@@ -402,7 +540,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
         _libraryMemory =
             next.length > 32 ? next.sublist(next.length - 32) : next;
       });
-      _saveLibraryMemory();
+      _storeHelper.saveLibraryMemory(_libraryMemory);
       _memoryCaptureCooldown = 2;
     } catch (_) {
       _memoryCaptureCooldown = 1;
@@ -424,6 +562,10 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
             apiKeyController: _apiKeyController,
             apiUrlController: _apiUrlController,
             modelController: _modelController,
+            uiLayout: _uiLayout,
+            onLayoutChanged: (layout) {
+              setState(() => _uiLayout = layout);
+            },
             onSave: () {
               _saveSettings();
               Navigator.of(context).pop();
@@ -433,6 +575,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
                 _apiKeyController.clear();
                 _apiUrlController.text = kDefaultApiUrl;
                 _modelController.text = kDefaultModel;
+                _uiLayout = 'classic';
               });
               _saveSettings();
             },
@@ -519,9 +662,9 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
         _libraryMemory = archive.memories;
         _quickOptionPoolIndex = archive.quickOptionPoolIndex;
       });
-      _saveHistory();
-      _saveLibraryMemory();
-      _saveQuickOptionPoolIndex();
+      _storeHelper.saveHistory(_messages);
+      _storeHelper.saveLibraryMemory(_libraryMemory);
+      _storeHelper.saveQuickOptionPoolIndex(_quickOptionPoolIndex);
       _jumpToBottomAfterOpen();
       _showSnack('图书馆存档已经恢复。');
     } catch (_) {
@@ -544,9 +687,9 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
       _libraryMemory = const [];
       _quickOptionPoolIndex = 0;
     });
-    _deleteStoreFile(kHistoryKey);
-    _deleteStoreFile(kLibraryMemoryKey);
-    _deleteStoreFile(kQuickCountKey);
+    _storeHelper.deleteHistory();
+    _storeHelper.deleteLibraryMemory();
+    _storeHelper.deleteQuickOptionPoolIndex();
     _showSnack('图书馆已经清空。');
   }
 
@@ -616,93 +759,39 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
         ChatMessage(
             role: 'assistant', content: '房间重新安静下来了。您可以从任何一个句子重新开始，亲爱的。'),
       ];
-      _deleteStoreFile(kHistoryKey);
+      _storeHelper.deleteHistory();
     });
   }
 
   void _loadSettings() {
-    final raw = _readStore(kSettingsKey);
-    if (raw == null) {
-      _apiUrlController.text = kDefaultApiUrl;
-      _modelController.text = kDefaultModel;
-      _quickOptionPoolIndex =
-          int.tryParse(_readStore(kQuickCountKey) ?? '0') ?? 0;
-      return;
-    }
-    final data = jsonDecode(raw) as Map<String, dynamic>;
-    _apiKeyController.text = data['apiKey']?.toString() ?? '';
-    _apiUrlController.text = data['apiUrl']?.toString() ?? kDefaultApiUrl;
-    _modelController.text = data['model']?.toString() ?? kDefaultModel;
-    _quickOptionPoolIndex =
-        int.tryParse(_readStore(kQuickCountKey) ?? '0') ?? 0;
+    final settings = _storeHelper.loadSettings();
+    _apiKeyController.text = settings['apiKey'] ?? '';
+    _apiUrlController.text = settings['apiUrl'] ?? kDefaultApiUrl;
+    _modelController.text = settings['model'] ?? kDefaultModel;
+    _uiLayout = settings['uiLayout'] ?? 'classic';
+    _quickOptionPoolIndex = _storeHelper.loadQuickOptionPoolIndex();
   }
 
   void _saveSettings() {
-    _writeStore(
-        kSettingsKey,
-        jsonEncode({
-          'apiKey': _apiKeyController.text.trim(),
-          'apiUrl': _apiUrlController.text.trim(),
-          'model': _modelController.text.trim(),
-        }));
+    _storeHelper.saveSettings(
+      _apiKeyController.text.trim(),
+      _apiUrlController.text.trim(),
+      _modelController.text.trim(),
+      uiLayout: _uiLayout,
+    );
   }
 
   void _loadHistory() {
-    final raw = _readStore(kHistoryKey);
-    if (raw == null) return;
-    final data = jsonDecode(raw) as List<dynamic>;
-    final history = data
-        .whereType<Map<String, dynamic>>()
-        .map(ChatMessage.fromJson)
-        .where((message) => message.content.trim().isNotEmpty)
-        .toList();
-    if (history.isNotEmpty) {
+    final history = _storeHelper.loadHistory();
+    if (history != null) {
       _messages = history;
     }
   }
 
   void _loadLibraryMemory() {
-    final raw = _readStore(kLibraryMemoryKey);
-    if (raw == null) return;
-    try {
-      final data = jsonDecode(raw) as List<dynamic>;
-      _libraryMemory = data
-          .map((item) {
-            if (item is Map<String, dynamic>) {
-              return LibraryMemoryItem.fromJson(item);
-            }
-            return LibraryMemoryItem.fromLegacyString(item.toString());
-          })
-          .where((item) => item.content.trim().isNotEmpty)
-          .toList();
-    } catch (_) {
-      _libraryMemory = const [];
-    }
+    _libraryMemory = _storeHelper.loadLibraryMemory();
   }
 
-  void _saveHistory() {
-    _writeStore(
-      kHistoryKey,
-      jsonEncode(_messages.map((message) => message.toJson()).toList()),
-    );
-  }
-
-  void _saveLibraryMemory() {
-    _writeStore(
-      kLibraryMemoryKey,
-      jsonEncode(_libraryMemory.map((memory) => memory.toJson()).toList()),
-    );
-  }
-
-  void _saveQuickOptionPoolIndex() {
-    _writeStore(kQuickCountKey, _quickOptionPoolIndex.toString());
-  }
-
-  String? _readStore(String key) => _store.read(key);
-
-  void _writeStore(String key, String value) => _store.write(key, value);
-
-  void _deleteStoreFile(String key) => _store.delete(key);
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_messageScrollController.hasClients) return;
@@ -727,5 +816,43 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
         );
       });
     });
+  }
+}
+
+class _StorybookTitle extends StatelessWidget {
+  const _StorybookTitle({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (!compact)
+          const Text(
+            '◇',
+            style: TextStyle(color: Color(0xA6FFFFFF), fontSize: 12),
+          ),
+        if (!compact) const SizedBox(width: 9),
+        const Text(
+          '时间之外',
+          style: TextStyle(
+            color: kWhite,
+            fontSize: 18,
+            height: 1.1,
+            letterSpacing: 2.5,
+            fontFamily: 'LXGWWenKai',
+            fontFamilyFallback: ['Microsoft YaHei', 'SimSun'],
+          ),
+        ),
+        if (!compact) const SizedBox(width: 9),
+        if (!compact)
+          const Text(
+            '◇',
+            style: TextStyle(color: Color(0xA6FFFFFF), fontSize: 12),
+          ),
+      ],
+    );
   }
 }

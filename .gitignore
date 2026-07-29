@@ -6,6 +6,9 @@
 .flutter-plugins-dependencies
 .packages
 build/
+dist/
 release/
 .idea/
 *.iml
+*.tgz
+.preview.*.log

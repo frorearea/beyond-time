@@ -8,6 +8,8 @@ class SettingsPanel extends StatefulWidget {
     required this.apiKeyController,
     required this.apiUrlController,
     required this.modelController,
+    required this.uiLayout,
+    required this.onLayoutChanged,
     required this.onSave,
     required this.onReset,
   });
@@ -15,6 +17,8 @@ class SettingsPanel extends StatefulWidget {
   final TextEditingController apiKeyController;
   final TextEditingController apiUrlController;
   final TextEditingController modelController;
+  final String uiLayout;
+  final ValueChanged<String> onLayoutChanged;
   final VoidCallback onSave;
   final VoidCallback onReset;
 
@@ -24,6 +28,23 @@ class SettingsPanel extends StatefulWidget {
 
 class _SettingsPanelState extends State<SettingsPanel> {
   bool _warned = false;
+  late String _selectedLayout;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedLayout = widget.uiLayout;
+  }
+
+  void _changeLayout(String layout) {
+    setState(() => _selectedLayout = layout);
+    widget.onLayoutChanged(layout);
+  }
+
+  void _reset() {
+    setState(() => _selectedLayout = 'classic');
+    widget.onReset();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +75,16 @@ class _SettingsPanelState extends State<SettingsPanel> {
                 obscure: true),
             SettingsField(label: 'API 地址', controller: widget.apiUrlController),
             SettingsField(label: '模型', controller: widget.modelController),
+            const Text(
+              '界面布局',
+              style: TextStyle(color: kWhite, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            LayoutChoice(
+              value: _selectedLayout,
+              onChanged: _changeLayout,
+            ),
+            const SizedBox(height: 20),
             const Text('人设 Prompt',
                 style: TextStyle(color: kWhite, fontSize: 13)),
             const SizedBox(height: 8),
@@ -82,10 +113,113 @@ class _SettingsPanelState extends State<SettingsPanel> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                OutlinedButton(
-                    onPressed: widget.onReset, child: const Text('重置')),
+                OutlinedButton(onPressed: _reset, child: const Text('重置')),
                 OutlinedButton(
                     onPressed: widget.onSave, child: const Text('保存')),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class LayoutChoice extends StatelessWidget {
+  const LayoutChoice({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _LayoutChoiceButton(
+            label: '经典',
+            subtitle: '上下布局',
+            selected: value == 'classic',
+            onTap: () => onChanged('classic'),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _LayoutChoiceButton(
+            label: '绘卷',
+            subtitle: '左右双页',
+            selected: value == 'storybook',
+            onTap: () => onChanged('storybook'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LayoutChoiceButton extends StatelessWidget {
+  const _LayoutChoiceButton({
+    required this.label,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0x14FFFFFF) : Colors.transparent,
+          border: Border.all(
+            color: selected ? kWhite : const Color(0x66FFFFFF),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 13,
+              height: 13,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: kWhite),
+              ),
+              padding: const EdgeInsets.all(3),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: selected ? kWhite : Colors.transparent,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(color: kWhite, fontSize: 14),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Color(0x80FFFFFF),
+                    fontSize: 10,
+                  ),
+                ),
               ],
             ),
           ],

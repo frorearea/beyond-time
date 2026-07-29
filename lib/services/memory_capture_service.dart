@@ -130,8 +130,24 @@ ${memoryDigest(existingMemories)}
         .replaceAll('```', '')
         .trim();
     final start = cleaned.indexOf('{');
-    final end = cleaned.lastIndexOf('}');
-    if (start < 0 || end <= start) return null;
-    return cleaned.substring(start, end + 1);
+    if (start < 0) return null;
+    var depth = 0;
+    for (var i = start; i < cleaned.length; i++) {
+      if (cleaned[i] == '{') {
+        depth++;
+      } else if (cleaned[i] == '}') {
+        depth--;
+        if (depth == 0) {
+          final candidate = cleaned.substring(start, i + 1);
+          try {
+            jsonDecode(candidate);
+            return candidate;
+          } catch (_) {
+            return null;
+          }
+        }
+      }
+    }
+    return null;
   }
 }
