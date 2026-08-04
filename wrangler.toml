@@ -1,0 +1,9 @@
+name = "beyond-time"
+main = "sites/worker.js"
+compatibility_date = "2024-01-01"
+
+# Serve the Flutter web build as static assets; worker.js proxies /api/chat.
+assets = { binding = "ASSETS", directory = "./build/web" }
+
+[observability]
+enabled = true
