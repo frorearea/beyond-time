@@ -16,7 +16,9 @@ class ChatApiClient {
     required String apiUrl,
     required void Function(String reply) onReply,
   }) async {
-    final useLocalProxy = html.window.location.protocol != 'file:';
+    final host = (html.window.location.hostname ?? '').toLowerCase();
+    final useLocalProxy =
+        host == 'localhost' || host == '127.0.0.1' || host == '::1';
     final requestUrl = useLocalProxy ? '/api/chat' : apiUrl;
     final requestBody = useLocalProxy
         ? {
