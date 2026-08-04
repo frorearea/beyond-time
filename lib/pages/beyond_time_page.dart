@@ -406,7 +406,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
         ChatMessage(role: 'assistant', content: result.notice),
       ];
     });
-    _storeHelper.saveHistory(_messages);
+    _persistHistory();
     _scrollToBottom();
   }
 
@@ -469,7 +469,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
       );
       _replaceLastAssistant(_conversationContext.cleanReply(reply));
       setState(() => _isSending = false);
-      _storeHelper.saveHistory(_messages);
+      _persistHistory();
       _storeHelper.saveLastVisit(DateTime.now().toIso8601String());
       _scrollToBottom();
       _startIdleTimer();
@@ -695,7 +695,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
         _libraryMemory = archive.memories;
         _quickOptionPoolIndex = archive.quickOptionPoolIndex;
       });
-      _storeHelper.saveHistory(_messages);
+      _persistHistory();
       _storeHelper.saveLibraryMemory(_libraryMemory);
       _storeHelper.saveQuickOptionPoolIndex(_quickOptionPoolIndex);
       _jumpToBottomAfterOpen();
@@ -855,9 +855,12 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
       return;
     }
     setState(() {
-      _messages = [..._messages, ChatMessage(role: 'assistant', content: greeting)];
+      _messages = [
+        ..._messages.where((message) => !message.isAmbient),
+        ChatMessage(role: 'assistant', content: greeting, isAmbient: true),
+      ];
     });
-    _storeHelper.saveHistory(_messages);
+    _persistHistory();
     _jumpToBottomAfterOpen();
   }
 
@@ -873,17 +876,23 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
       _idleTimer?.cancel();
       final line = (List<String>.of(kLeaveLines)..shuffle(math.Random())).first;
       setState(() {
-        _messages = [..._messages, ChatMessage(role: 'assistant', content: line)];
+        _messages = [
+          ..._messages.where((message) => !message.isAmbient),
+          ChatMessage(role: 'assistant', content: line, isAmbient: true),
+        ];
       });
-      _storeHelper.saveHistory(_messages);
+      _persistHistory();
       _scrollToBottom();
     } else {
       _startIdleTimer();
       final line = (List<String>.of(kReturnShortLines)..shuffle(math.Random())).first;
       setState(() {
-        _messages = [..._messages, ChatMessage(role: 'assistant', content: line)];
+        _messages = [
+          ..._messages.where((message) => !message.isAmbient),
+          ChatMessage(role: 'assistant', content: line, isAmbient: true),
+        ];
       });
-      _storeHelper.saveHistory(_messages);
+      _persistHistory();
       _scrollToBottom();
     }
   }
@@ -892,11 +901,21 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     if (!mounted || _isSending) return;
     final line = (List<String>.of(kIdleLines)..shuffle(math.Random())).first;
     setState(() {
-      _messages = [..._messages, ChatMessage(role: 'assistant', content: line)];
+      _messages = [
+        ..._messages.where((message) => !message.isAmbient),
+        ChatMessage(role: 'assistant', content: line, isAmbient: true),
+      ];
     });
-    _storeHelper.saveHistory(_messages);
+    _persistHistory();
     _scrollToBottom();
     _startIdleTimer();
+  }
+
+  /// 存档时剔除环境台词（idle / 离馆 / 回归语），不污染真实对话记录。
+  void _persistHistory() {
+    _storeHelper.saveHistory(
+      _messages.where((message) => !message.isAmbient).toList(),
+    );
   }
 
   void _scrollToBottom() {

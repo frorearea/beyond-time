@@ -119,8 +119,16 @@ dart tool/profile_test.dart
 ### 运行时行为
 - API 配置存 localStorage（`beyondTimeFlutterSettings`）；`server.js` 本地代理 /api/chat
 - 页面从 `file:` 打开时绕过代理直连 API（见 `chat_api_web.dart`）
+- 线上环境（GitHub Pages 等）仅 localhost 走 `/api/chat` 代理，其余直连 API（见 `chat_api_web.dart` 的 hostname 判断）
 - idle 定时器 3 分钟；「离馆」暂停 idle；用户发消息自动"回来"
 - 用户画像：消息 ≥3 条才注入；亲近度 = 天数/轮数四档
+
+### 部署（GitHub Pages）
+- 已上线：`https://frorearea.github.io/beyond-time/`（2026-08-04）
+- 部署方式：`.github/workflows/pages.yml`，push main 自动 `flutter build web --base-href=/beyond-time/` + deploy-pages
+- 仓库 Settings → Pages → Source 需选 **GitHub Actions**
+- 国内直连慢，需代理才能流畅加载（main.dart.js 2.6MB）
+- 线上对话直连 DeepSeek 可能遇 CORS；待办：配 Cloudflare Worker 代理（`sites/worker.js` 已就绪，API Key 放服务端）
 
 ---
 
