@@ -23,7 +23,7 @@
 | 功能 | 说明 | 关键位置 |
 |---|---|---|
 | 流式对话 | DeepSeek API，打字机效果，thinking 开启 | `lib/services/chat_api_*.dart` |
-| 心声快速选项 | 38 组轮换，进度持久化 | `lib/data/quick_options.dart` |
+| 心声快速选项 | 38 组轮换，进度持久化；可折叠（按钮在发送行「清空」右侧） | `lib/data/quick_options.dart`、`lib/widgets/quick_options.dart` |
 | 图书馆记忆 | LLM 自动提炼（上限 32 条），书签手动收藏 | `lib/services/memory_capture_service.dart` |
 | 塔罗占卜 | 记忆 ≥5 条解锁，三张牌 + 记忆结合解读 | `lib/services/tarot_reading_service.dart` |
 | 存档/恢复 | 对话+记忆+心声进度 JSON 导入导出 | `lib/services/archive_service_*.dart` |
@@ -33,6 +33,7 @@
 | 回归情感弧 | 3h/1d/1w/1m 四档回归台词（lastVisit 时间戳） | `lib/data/return_lines.dart`、`_checkReturnGreeting` |
 | 环境音景 | 雨/炉火/风声（真实 OGG 录音），点击循环切换 | `lib/services/ambient_sound_web.dart` |
 | 动态光影 | 魔女立像背后烛光呼吸动画 | `lib/widgets/candle_glow.dart` |
+| 环境语隔离 | idle/离馆/回归台词标记 `isAmbient`：页面至多一条、不入存档 | `lib/models/chat_message.dart`、`_persistHistory` |
 | 桌面版 | SEA 打包 exe，自动起服务+开浏览器 | `scripts/build-windows-bundle.js` |
 
 ### 待办/可探索方向（按优先级）
@@ -70,10 +71,12 @@ scripts/
   build-sites.mjs             Cloudflare 构建
   build-windows-bundle.js     exe 打包（SEA + resedit 图标）
   set-exe-icon.mjs            PE 图标替换（纯 JS，勿删）
+  subset-fonts.js             中文字体子集化（改动标题/诗句文字后重跑）
+  compress-portrait.js        魔女立像 WebP 压缩（sharp）
 tool/profile_test.dart        用户画像单元测试（dart tool/profile_test.dart 运行）
 assets/
-  fonts/       CormorantGaramond-Italic / LXGWWenKai / NotoSerifSC-VF（+OFL 许可）
-  images/      ereta-cropped-display.png / app-icon.png(.ico)
+  fonts/       CormorantGaramond-Italic / LXGWWenKai-subset / NotoSerifSC-subset（+OFL 许可）
+  images/      ereta-cropped-display.webp / app-icon.png(.ico)
   sounds/      heavy-rain.ogg / fireplace.ogg / wind.ogg（Muges/ambientsounds CC0/CC）
   prompts/     ereta_persona.txt（人设，勿删备份版）
   source/      高分辨率原图（不打包，用户要求保留）
@@ -118,17 +121,25 @@ dart tool/profile_test.dart
 
 ### 运行时行为
 - API 配置存 localStorage（`beyondTimeFlutterSettings`）；`server.js` 本地代理 /api/chat
-- 页面从 `file:` 打开时绕过代理直连 API（见 `chat_api_web.dart`）
-- 线上环境（GitHub Pages 等）仅 localhost 走 `/api/chat` 代理，其余直连 API（见 `chat_api_web.dart` 的 hostname 判断）
+- 线上环境（GitHub Pages 等）仅 localhost 走 `/api/chat` 代理，其余直连 API；Cloudflare 域名（`.workers.dev`/`.pages.dev`）也走代理（见 `chat_api_web.dart` 的 hostname 判断）
 - idle 定时器 3 分钟；「离馆」暂停 idle；用户发消息自动"回来"
+- 环境语（idle/离馆/回归）标记 `isAmbient`：**页面同时至多一条，且不写入存档**
 - 用户画像：消息 ≥3 条才注入；亲近度 = 天数/轮数四档
+- 心声选项可折叠（Composer 行「清空」右侧小方块按钮）
 
 ### 部署（GitHub Pages）
 - 已上线：`https://frorearea.github.io/beyond-time/`（2026-08-04）
-- 部署方式：`.github/workflows/pages.yml`，push main 自动 `flutter build web --base-href=/beyond-time/` + deploy-pages
+- 部署方式：`.github/workflows/pages.yml`，push main 自动 `flutter build web --base-href=/beyond-time/` + 静态资源 gzip 预压缩 + deploy-pages
 - 仓库 Settings → Pages → Source 需选 **GitHub Actions**
-- 国内直连慢，需代理才能流畅加载（main.dart.js 2.6MB）
-- 线上对话直连 DeepSeek 可能遇 CORS；待办：配 Cloudflare Worker 代理（`sites/worker.js` 已就绪，API Key 放服务端）
+- 国内直连慢，需代理才能流畅加载
+- 线上对话直连 DeepSeek 可能遇 CORS；待办：配 Cloudflare Worker 代理（已配置 wrangler.toml + workflow + secrets，**当前搁置**，等有域名再启用）
+
+### 性能优化记录（2026-08-04）
+- 总构建体积：99.7MB → **~48MB**
+- 中文字体子集化：LXGWWenKai 25MB→12KB（诗句子集）、NotoSerifSC 24MB→4KB（标题子集）；魔女回复改系统宋体、用户消息系统黑体
+- 魔女立像：PNG 3.5MB → **WebP 124KB**（sharp 压缩）
+- 静态资源 gzip 预压缩（workflow 内自动做）
+- 剩余大头：CanvasKit wasm ~29MB（Flutter 渲染引擎，浏览器缓存后可复用）
 
 ---
 
@@ -146,7 +157,9 @@ dart tool/profile_test.dart
 ## 六、当前已知问题 / 注意
 
 1. `beyond_time_page.dart` 已 ~1000 行，是唯一编排中心，改动小心回归
-2. 桌面版定位是"附带产物"，主要形态建议走 Web/PWA；GitHub Pages 子路径部署需配 base href（暂未配置）
+2. 桌面版定位是"附带产物"，主要形态建议走 Web/PWA
 3. `assets/sounds/` 的 OGG 来自 GitHub Muges/ambientsounds（CC0/CC BY），fireplace 与 wind 听感曾相似，已换为当前版本
-4. 字体 NotoSerifSC 来自系统字体复制（SIL OFL，可自由分发）
+4. 中文字体是**子集化**的：改动标题/诗句文字后必须重跑 `node scripts/subset-fonts.js`，否则新字缺失会 fallback 到系统字体
 5. `release/web` 每次打包会覆盖；手改 `release/web` 无效，改 `build/web` 来源
+6. 本地构建**不要**带 `--base-href`（会覆盖本地产物为 GitHub Pages 路径）；GitHub Pages 的 base-href 由 CI 单独构建
+7. 打包 exe 依赖 npm 包 `@yao-pkg/pkg` + `resedit`，若 `node_modules` 被清需先 `npm install`
