@@ -70,8 +70,6 @@ class StorybookPortraitPanel extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            const SkyLines(),
-            const CandleGlow(),
             Padding(
               padding: EdgeInsets.fromLTRB(
                 showQuote ? 12 : 36,
@@ -87,6 +85,8 @@ class StorybookPortraitPanel extends StatelessWidget {
                 isAntiAlias: true,
               ),
             ),
+            const CandleGlow(),
+            const SkyLines(),
             if (showQuote)
               const Align(
                 alignment: Alignment.bottomCenter,

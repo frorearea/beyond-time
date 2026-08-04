@@ -23,10 +23,10 @@ class MessageView extends StatelessWidget {
       color: kWhite,
       fontSize: isPlayer ? 18 : 19,
       height: isPlayer ? 1.5 : 1.48,
-      fontFamily: isPlayer ? 'Microsoft YaHei' : 'STSong',
+      fontFamily: isPlayer ? 'SimHei' : 'LXGWWenKai',
       fontFamilyFallback: isPlayer
-          ? const ['PingFang SC', 'Noto Sans CJK SC', 'SimHei']
-          : const ['SimSun', 'Songti SC', 'Noto Serif CJK SC', 'serif'],
+          ? const ['Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC']
+          : const ['STSong', 'Songti SC', 'Noto Serif CJK SC', 'SimSun', 'serif'],
     );
     if (isPlayer) {
       return Text('> $content', style: style);

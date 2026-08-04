@@ -118,12 +118,12 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
                                   child: Stack(
                                     alignment: Alignment.bottomCenter,
                                     children: const [
-                                      Positioned.fill(child: SkyLines()),
-                                      Positioned.fill(child: CandleGlow()),
                                       Padding(
                                         padding: EdgeInsets.only(bottom: 8),
                                         child: WitchPortrait(),
                                       ),
+                                      Positioned.fill(child: CandleGlow()),
+                                      Positioned.fill(child: SkyLines()),
                                     ],
                                   ),
                                 ),
