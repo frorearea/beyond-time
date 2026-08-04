@@ -29,6 +29,29 @@ jobs:
       - name: Build Web
         run: flutter build web --base-href=/beyond-time/
 
+      - name: Pre-compress static assets with gzip
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const zlib = require('zlib');
+            const root = 'build/web';
+            const compressible = ['.html','.js','.css','.json','.wasm','.svg','.ttf','.otf','.txt','.map'];
+            const walk = (dir) => {
+              for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+                const p = path.join(dir, e.name);
+                if (e.isDirectory()) { walk(p); continue; }
+                const ext = path.extname(e.name).toLowerCase();
+                if (!compressible.includes(ext)) continue;
+                const data = fs.readFileSync(p);
+                if (data.length < 1024) continue;
+                fs.writeFileSync(p + '.gz', zlib.gzipSync(data, { level: 9 }));
+              }
+            };
+            walk(root);
+            console.log('gzip done');
+          "
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
