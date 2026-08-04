@@ -8,6 +8,7 @@
 build/
 dist/
 release/
+node_modules/
 .idea/
 *.iml
 *.tgz

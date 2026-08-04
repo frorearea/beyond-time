@@ -4,9 +4,38 @@ const path = require("path");
 
 const projectRoot = path.resolve(__dirname, "..");
 const webRoot = path.join(projectRoot, "build", "web");
+const fallbackWebRoot = path.join(projectRoot, "release", "web");
 const releaseRoot = path.join(projectRoot, "release");
 const bundlePath = path.join(releaseRoot, "windows-bundled-server.js");
 const exePath = path.join(releaseRoot, "BeyondTime.exe");
+const iconPath = path.join(projectRoot, "assets", "images", "app-icon.ico");
+
+// Prefer the fresh Flutter build; fall back to the last packaged web copy.
+const sourceWebRoot = fs.existsSync(path.join(webRoot, "index.html"))
+  ? webRoot
+  : fs.existsSync(path.join(fallbackWebRoot, "index.html"))
+    ? fallbackWebRoot
+    : null;
+
+if (!sourceWebRoot) {
+  throw new Error("build/web/index.html not found. Run flutter build web first.");
+}
+
+fs.mkdirSync(releaseRoot, { recursive: true });
+
+// 1. Copy the web build next to the exe so the server can serve it from disk.
+const webDest = path.join(releaseRoot, "web");
+fs.rmSync(webDest, { recursive: true, force: true });
+fs.cpSync(sourceWebRoot, webDest, { recursive: true });
+
+// 2. Generate a small server bundle that serves ./web relative to the exe.
+const source = `const childProcess = require("child_process");
+const http = require("http");
+const fs = require("fs");
+const path = require("path");
+
+const root = path.join(path.dirname(process.execPath), "web");
+const preferredPort = Number(process.env.PORT || 4173);
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -19,31 +48,12 @@ const mimeTypes = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".png": "image/png",
+  ".ogg": "audio/ogg",
+  ".mp3": "audio/mpeg",
   ".ttf": "font/ttf",
   ".otf": "font/otf",
+  ".bin": "application/octet-stream",
 };
-
-if (!fs.existsSync(path.join(webRoot, "index.html"))) {
-  throw new Error("build/web/index.html not found. Run flutter build web first.");
-}
-
-fs.mkdirSync(releaseRoot, { recursive: true });
-
-const assets = {};
-for (const filePath of walk(webRoot)) {
-  const relativePath = toWebPath(path.relative(webRoot, filePath));
-  const ext = path.extname(filePath);
-  assets[relativePath] = {
-    mime: mimeTypes[ext] || "application/octet-stream",
-    data: fs.readFileSync(filePath).toString("base64"),
-  };
-}
-
-const source = `const childProcess = require("child_process");
-const http = require("http");
-
-const ASSETS = ${JSON.stringify(assets)};
-const preferredPort = Number(process.env.PORT || 4173);
 
 const server = http.createServer(async (request, response) => {
   try {
@@ -136,7 +146,7 @@ async function handleChat(request, response) {
       "X-Accel-Buffering": "no",
     });
     response.flushHeaders?.();
-    response.write(": stream\\\\n\\\\n");
+    response.write(": stream\\n\\n");
 
     if (!upstream.body) {
       response.end();
@@ -161,25 +171,45 @@ async function handleChat(request, response) {
 }
 
 function serveAsset(pathname, response) {
-  let assetPath = decodeURIComponent(pathname);
-  while (assetPath.startsWith("/")) {
-    assetPath = assetPath.slice(1);
+  let safePath = decodeURIComponent(pathname);
+  while (safePath.startsWith("/")) {
+    safePath = safePath.slice(1);
   }
-  if (!assetPath) assetPath = "index.html";
-  const asset = ASSETS[assetPath] || (!assetPath.includes(".") ? ASSETS["index.html"] : null);
+  if (!safePath) safePath = "index.html";
+  const filePath = path.normalize(path.join(root, safePath));
 
-  if (!asset) {
+  if (filePath !== root && !filePath.startsWith(root + path.sep)) {
+    sendJson(response, 403, { error: "Forbidden" });
+    return;
+  }
+
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+    if (!path.extname(safePath)) {
+      sendFile(path.join(root, "index.html"), response);
+      return;
+    }
     sendJson(response, 404, { error: "Not found." });
     return;
   }
 
-  response.writeHead(200, {
-    "Content-Type": asset.mime,
-    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-    Pragma: "no-cache",
-    Expires: "0",
+  sendFile(filePath, response);
+}
+
+function sendFile(filePath, response) {
+  fs.readFile(filePath, (error, data) => {
+    if (error) {
+      sendJson(response, 404, { error: "Not found." });
+      return;
+    }
+    const ext = path.extname(filePath);
+    response.writeHead(200, {
+      "Content-Type": mimeTypes[ext] || "application/octet-stream",
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    });
+    response.end(data);
   });
-  response.end(Buffer.from(asset.data, "base64"));
 }
 
 function readJson(request) {
@@ -213,26 +243,25 @@ function sendJson(response, statusCode, payload) {
 
 fs.writeFileSync(bundlePath, source, "utf8");
 
+// 3. Package the small server into an exe using Node SEA via @yao-pkg/pkg,
+//    then set the app icon via a pure-JS PE resource edit (resedit).
+//    (rcedit hangs in some environments and classic pkg payloads get corrupted;
+//     resedit rewrites the PE resource section without touching the SEA blob.)
+const pkgBin = path.join(projectRoot, "node_modules", "@yao-pkg", "pkg", "lib-es5", "bin.js");
 childProcess.execSync(
-  `npx --yes pkg@5.8.1 "${bundlePath}" --targets node18-win-x64 --output "${exePath}"`,
+  `node "${pkgBin}" "${bundlePath}" --sea --targets node24-win-x64 --output "${exePath}"`,
   { cwd: projectRoot, stdio: "inherit", shell: "cmd.exe" },
 );
 
-console.log(exePath);
-
-function walk(dir) {
-  const results = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const entryPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      results.push(...walk(entryPath));
-    } else if (entry.isFile()) {
-      results.push(entryPath);
-    }
+if (fs.existsSync(iconPath) && fs.existsSync(path.join(projectRoot, "node_modules", "resedit"))) {
+  try {
+    childProcess.execSync(
+      `node "${path.join(projectRoot, "scripts", "set-exe-icon.mjs")}" "${exePath}" "${iconPath}"`,
+      { cwd: projectRoot, stdio: "inherit", shell: "cmd.exe", timeout: 60000 },
+    );
+  } catch (error) {
+    console.warn("Skipped icon: resedit failed.", error.message);
   }
-  return results;
 }
 
-function toWebPath(value) {
-  return value.split(path.sep).join("/");
-}
+console.log(exePath);

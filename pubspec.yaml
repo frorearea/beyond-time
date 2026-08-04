@@ -27,3 +27,6 @@ flutter:
     - family: LXGWWenKai
       fonts:
         - asset: assets/fonts/LXGWWenKai-Regular.ttf
+    - family: NotoSerifSC
+      fonts:
+        - asset: assets/fonts/NotoSerifSC-VF.ttf

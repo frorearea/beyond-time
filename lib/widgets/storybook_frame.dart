@@ -43,62 +43,11 @@ class StorybookFramePainter extends CustomPainter {
       ..color = const Color(0x70FFFFFF)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
-    final bright = Paint()
-      ..color = const Color(0xC7FFFFFF)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
 
     canvas.drawRect(
       Rect.fromLTWH(6.5, 6.5, size.width - 13, size.height - 13),
       line,
     );
-
-    const corner = 30.0;
-    for (final offset in [
-      Offset.zero,
-      Offset(size.width, 0),
-      Offset(0, size.height),
-      Offset(size.width, size.height),
-    ]) {
-      final sx = offset.dx == 0 ? 1.0 : -1.0;
-      final sy = offset.dy == 0 ? 1.0 : -1.0;
-      final path = Path()
-        ..moveTo(offset.dx + sx * 4, offset.dy + sy * corner)
-        ..quadraticBezierTo(
-          offset.dx + sx * 6,
-          offset.dy + sy * 8,
-          offset.dx + sx * corner,
-          offset.dy + sy * 4,
-        )
-        ..moveTo(offset.dx + sx * 10, offset.dy + sy * corner)
-        ..quadraticBezierTo(
-          offset.dx + sx * 12,
-          offset.dy + sy * 15,
-          offset.dx + sx * corner,
-          offset.dy + sy * 10,
-        );
-      canvas.drawPath(path, bright);
-      canvas.drawCircle(
-        Offset(offset.dx + sx * 13, offset.dy + sy * 13),
-        2.3,
-        bright,
-      );
-    }
-
-    final topCenter = Offset(size.width / 2, 7);
-    final bottomCenter = Offset(size.width / 2, size.height - 7);
-    _drawDiamond(canvas, topCenter, bright);
-    _drawDiamond(canvas, bottomCenter, bright);
-  }
-
-  void _drawDiamond(Canvas canvas, Offset center, Paint paint) {
-    final path = Path()
-      ..moveTo(center.dx, center.dy - 4)
-      ..lineTo(center.dx + 6, center.dy)
-      ..lineTo(center.dx, center.dy + 4)
-      ..lineTo(center.dx - 6, center.dy)
-      ..close();
-    canvas.drawPath(path, paint);
   }
 
   @override

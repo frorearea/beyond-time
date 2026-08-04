@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
 import '../config.dart';
+import '../data/idle_lines.dart';
 import '../data/quick_options.dart';
+import '../data/return_lines.dart';
 import '../models/chat_message.dart';
 import '../models/library_archive.dart';
 import '../models/library_memory_item.dart';
+import '../models/user_profile.dart';
 import '../services/archive_service.dart';
 import '../services/bookmark_service.dart';
 import '../services/chat_api.dart';
@@ -57,7 +61,10 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   int _quickOptionPoolIndex = 0;
   int _memoryCaptureCooldown = 0;
   bool _isMemoryCaptureRunning = false;
-  String _uiLayout = 'classic';
+  String _uiLayout = 'storybook';
+  Timer? _idleTimer;
+  bool _isAway = false;
+  late UserProfile _userProfile;
 
   @override
   void initState() {
@@ -66,11 +73,15 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     _loadSettings();
     _loadHistory();
     _loadLibraryMemory();
+    _loadUserProfile();
+    _checkReturnGreeting();
+    _startIdleTimer();
     _jumpToBottomAfterOpen();
   }
 
   @override
   void dispose() {
+    _idleTimer?.cancel();
     _inputController.dispose();
     _apiKeyController.dispose();
     _apiUrlController.dispose();
@@ -81,9 +92,11 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
 
   @override
   Widget build(BuildContext context) {
+    final isWide = MediaQuery.of(context).size.width >= 640;
+    final effectiveLayout = _uiLayout == 'storybook' && isWide ? 'storybook' : 'classic';
     return Scaffold(
       backgroundColor: kBlack,
-      body: _uiLayout == 'storybook'
+      body: effectiveLayout == 'storybook'
           ? _buildStorybookLayout()
           : Center(
               child: ConstrainedBox(
@@ -160,9 +173,14 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
                               TopTextButton(
                                   label: '存档', onTap: _openArchivePanel),
                               const SizedBox(width: 18),
-                              TopTextButton(label: '设置', onTap: _openSettings),
+                              TopTextButton(
+                                  label: '设置', onTap: _openSettings),
                               const SizedBox(width: 18),
                               const SoundControl(),
+                              const SizedBox(width: 18),
+                              TopTextButton(
+                                  label: _isAway ? '回来' : '离馆',
+                                  onTap: _toggleAway),
                             ],
                           ),
                         ),
@@ -253,6 +271,8 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
         TopTextButton(label: '设置', onTap: _openSettings),
         const SizedBox(width: 14),
         const SoundControl(),
+        const SizedBox(width: 14),
+        TopTextButton(label: _isAway ? '回来' : '离馆', onTap: _toggleAway),
       ],
     );
 
@@ -323,11 +343,13 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
 
   Future<void> _handleQuickOption(String text) async {
     if (_isSending) return;
+    _startIdleTimer();
     _advanceQuickOptions();
     await _sendText(text, clearInput: true);
   }
 
   void _refreshQuickOptions() {
+    _startIdleTimer();
     _advanceQuickOptions();
   }
 
@@ -389,6 +411,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   }
 
   Future<void> _sendCurrentText() async {
+    _startIdleTimer();
     final text = _inputController.text.trim();
     await _sendText(text, clearInput: true);
   }
@@ -401,6 +424,10 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     int maxTokens = 520,
   }) async {
     if (_isSending) return;
+    if (_isAway) {
+      _isAway = false;
+    }
+    _startIdleTimer();
     text = text.trim();
     if (text.isEmpty) return;
 
@@ -411,6 +438,8 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
       }
       _isSending = true;
     });
+    _userProfile.observe(text);
+    _storeHelper.saveUserProfile(_userProfile);
     _scrollToBottom();
 
     if (_apiKeyController.text.trim().isEmpty) {
@@ -441,13 +470,16 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
       _replaceLastAssistant(_conversationContext.cleanReply(reply));
       setState(() => _isSending = false);
       _storeHelper.saveHistory(_messages);
+      _storeHelper.saveLastVisit(DateTime.now().toIso8601String());
       _scrollToBottom();
+      _startIdleTimer();
       if (captureMemory) {
         unawaited(_maybeCaptureMemory(userText: text, assistantReply: reply));
       }
     } catch (error) {
       _replaceLastAssistant('连接没有成功：$error');
       setState(() => _isSending = false);
+      _startIdleTimer();
     }
   }
 
@@ -463,6 +495,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
         persona: _persona,
         messages: _messages,
         memories: _libraryMemory,
+        userProfile: _userProfile,
         extraSystemInstruction: extraSystemInstruction,
       ),
       'temperature': 1.35,
@@ -760,7 +793,9 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
             role: 'assistant', content: '房间重新安静下来了。您可以从任何一个句子重新开始，亲爱的。'),
       ];
       _storeHelper.deleteHistory();
+      _storeHelper.saveLastVisit(DateTime.now().toIso8601String());
     });
+    _startIdleTimer();
   }
 
   void _loadSettings() {
@@ -768,7 +803,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     _apiKeyController.text = settings['apiKey'] ?? '';
     _apiUrlController.text = settings['apiUrl'] ?? kDefaultApiUrl;
     _modelController.text = settings['model'] ?? kDefaultModel;
-    _uiLayout = settings['uiLayout'] ?? 'classic';
+    _uiLayout = settings['uiLayout'] ?? 'storybook';
     _quickOptionPoolIndex = _storeHelper.loadQuickOptionPoolIndex();
   }
 
@@ -790,6 +825,78 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
 
   void _loadLibraryMemory() {
     _libraryMemory = _storeHelper.loadLibraryMemory();
+  }
+
+  void _loadUserProfile() {
+    _userProfile = _storeHelper.loadUserProfile() ?? UserProfile();
+    _userProfile.touch();
+    _storeHelper.saveUserProfile(_userProfile);
+  }
+
+  void _checkReturnGreeting() {
+    final lastVisit = _storeHelper.loadLastVisit();
+    if (lastVisit == null) {
+      _storeHelper.saveLastVisit(DateTime.now().toIso8601String());
+      return;
+    }
+    final last = DateTime.tryParse(lastVisit);
+    if (last == null) return;
+    final elapsed = DateTime.now().difference(last);
+    String greeting;
+    if (elapsed.inDays >= 30) {
+      greeting = (List<String>.of(kReturnGreetingMonths)..shuffle(math.Random())).first;
+    } else if (elapsed.inDays >= 7) {
+      greeting = (List<String>.of(kReturnGreetingWeeks)..shuffle(math.Random())).first;
+    } else if (elapsed.inDays >= 1) {
+      greeting = (List<String>.of(kReturnGreetingDays)..shuffle(math.Random())).first;
+    } else if (elapsed.inHours >= 3) {
+      greeting = (List<String>.of(kReturnGreetingHours)..shuffle(math.Random())).first;
+    } else {
+      return;
+    }
+    setState(() {
+      _messages = [..._messages, ChatMessage(role: 'assistant', content: greeting)];
+    });
+    _storeHelper.saveHistory(_messages);
+    _jumpToBottomAfterOpen();
+  }
+
+  void _startIdleTimer() {
+    _idleTimer?.cancel();
+    if (_isAway) return;
+    _idleTimer = Timer(const Duration(minutes: 3), _fireIdleLine);
+  }
+
+  void _toggleAway() {
+    _isAway = !_isAway;
+    if (_isAway) {
+      _idleTimer?.cancel();
+      final line = (List<String>.of(kLeaveLines)..shuffle(math.Random())).first;
+      setState(() {
+        _messages = [..._messages, ChatMessage(role: 'assistant', content: line)];
+      });
+      _storeHelper.saveHistory(_messages);
+      _scrollToBottom();
+    } else {
+      _startIdleTimer();
+      final line = (List<String>.of(kReturnShortLines)..shuffle(math.Random())).first;
+      setState(() {
+        _messages = [..._messages, ChatMessage(role: 'assistant', content: line)];
+      });
+      _storeHelper.saveHistory(_messages);
+      _scrollToBottom();
+    }
+  }
+
+  void _fireIdleLine() {
+    if (!mounted || _isSending) return;
+    final line = (List<String>.of(kIdleLines)..shuffle(math.Random())).first;
+    setState(() {
+      _messages = [..._messages, ChatMessage(role: 'assistant', content: line)];
+    });
+    _storeHelper.saveHistory(_messages);
+    _scrollToBottom();
+    _startIdleTimer();
   }
 
   void _scrollToBottom() {
@@ -826,33 +933,93 @@ class _StorybookTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (!compact)
-          const Text(
-            '◇',
-            style: TextStyle(color: Color(0xA6FFFFFF), fontSize: 12),
+    return SizedBox(
+      height: compact ? 30 : 38,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(width: compact ? 20 : 36, child: const _TitleLine()),
+          SizedBox(width: compact ? 8 : 12),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '时间之外',
+                style: TextStyle(
+                  fontSize: compact ? 15 : 20,
+                  height: 1.1,
+                  letterSpacing: compact ? 4 : 6,
+                  fontWeight: FontWeight.w400,
+                  fontFamily: 'NotoSerifSC',
+                  fontFamilyFallback: const ['STSong', 'SimSun', 'STKaiti', 'LXGWWenKai'],
+                  color: const Color(0xF0FFFFFF),
+                  shadows: const [
+                    Shadow(
+                      color: Color(0x30FFFFFF),
+                      offset: Offset(0, 0),
+                      blurRadius: 8,
+                    ),
+                    Shadow(
+                      color: Color(0x80000000),
+                      offset: Offset(0.5, 0.5),
+                      blurRadius: 0,
+                    ),
+                  ],
+                ),
+              ),
+              if (!compact) ...[
+                const SizedBox(height: 3),
+                const Text(
+                  'BEYOND TIME',
+                  style: TextStyle(
+                    fontSize: 9,
+                    height: 0.9,
+                    letterSpacing: 3.6,
+                    fontWeight: FontWeight.w300,
+                    fontFamily: 'CormorantGaramond',
+                    fontStyle: FontStyle.italic,
+                    color: Color(0x88FFFFFF),
+                  ),
+                ),
+              ],
+            ],
           ),
-        if (!compact) const SizedBox(width: 9),
-        const Text(
-          '时间之外',
-          style: TextStyle(
-            color: kWhite,
-            fontSize: 18,
-            height: 1.1,
-            letterSpacing: 2.5,
-            fontFamily: 'LXGWWenKai',
-            fontFamilyFallback: ['Microsoft YaHei', 'SimSun'],
-          ),
-        ),
-        if (!compact) const SizedBox(width: 9),
-        if (!compact)
-          const Text(
-            '◇',
-            style: TextStyle(color: Color(0xA6FFFFFF), fontSize: 12),
-          ),
-      ],
+          SizedBox(width: compact ? 8 : 12),
+          SizedBox(width: compact ? 20 : 36, child: const _TitleLine()),
+        ],
+      ),
     );
   }
+}
+
+class _TitleLine extends StatelessWidget {
+  const _TitleLine();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: const Size(double.infinity, 10),
+      painter: _TitleLinePainter(),
+    );
+  }
+}
+
+class _TitleLinePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final mid = size.height / 2;
+    final paint1 = Paint()
+      ..color = const Color(0x55FFFFFF)
+      ..strokeWidth = 0.6;
+    canvas.drawLine(Offset(0, mid), Offset(size.width - 4, mid), paint1);
+    canvas.drawCircle(Offset(size.width - 2, mid), 1.0, paint1);
+    final paint2 = Paint()
+      ..color = const Color(0x22FFFFFF)
+      ..strokeWidth = 0.4;
+    canvas.drawLine(Offset(0, mid - 2.5), Offset(size.width - 1, mid - 2.5), paint2);
+    canvas.drawLine(Offset(0, mid + 2.5), Offset(size.width - 1, mid + 2.5), paint2);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

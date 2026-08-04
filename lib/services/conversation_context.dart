@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../models/chat_message.dart';
 import '../models/library_memory_item.dart';
+import '../models/user_profile.dart';
 
 class ConversationContext {
   const ConversationContext();
@@ -10,6 +11,7 @@ class ConversationContext {
     required String persona,
     required List<ChatMessage> messages,
     required List<LibraryMemoryItem> memories,
+    UserProfile? userProfile,
     String? extraSystemInstruction,
   }) {
     final visibleMessages = messages
@@ -34,6 +36,8 @@ class ConversationContext {
 
     return [
       {'role': 'system', 'content': persona},
+      if (userProfile != null && userProfile.isMeaningful)
+        {'role': 'system', 'content': userProfile.toContextText()},
       if (recentMemories.isNotEmpty)
         {
           'role': 'system',

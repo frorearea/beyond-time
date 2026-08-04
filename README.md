@@ -1,79 +1,124 @@
-﻿# 时间之外
+﻿<div align="center">
 
-伟大的创作之路从这里开始（不是）。
+# 时间之外 · Beyond Time
 
-《时间之外》是一个小小的网页避难所：在纯黑的界面里，来访者可以和一位温柔而强大的图书馆魔女对话。它不是效率工具，也不是生产力助手，而是一个暂时从现实、比较、规训和他者凝视中撤离的房间。
+**一座纯黑的魔女图书馆避难所 —— 和一个温柔又腹黑的 AI 魔女对谈**
 
-这个项目想做的事情很简单：让被现实压得喘不过气的人，能在一段对谈里重新听见自己真实的热爱。
+![flutter](https://img.shields.io/badge/Flutter-Web-02569B?logo=flutter)
+![dart](https://img.shields.io/badge/Dart-%5E3.6-0175C2?logo=dart)
+![license](https://img.shields.io/badge/license-MIT-green)
+![zero-dep](https://img.shields.io/badge/dependencies-zero-yellow)
 
-## 当前形态
+它不是效率工具，不是生产力助手，不是知识库。
+它只是一间让你从「效率、比较、规训和他者凝视」中暂时撤离的房间。
 
-- Flutter Web 黑白极简界面
-- 魔女形象参考图展示
-- 纯文本对话框
-- DeepSeek Chat Completions API 后端代理
-- 流式回复与打字机显示
-- 独立角色 Prompt 文件
-- 心声选项与自由输入并存
-- 图书馆记忆、书签收藏与存档导入导出
-- 塔罗占卜入口（记忆足够后出现）
-- 内置英文字体与中文文楷字体
-- 本地浏览器保存 API Key、模型与对话记录
+> 我给你一个久久地望着孤月的人的悲哀。
+> *— What Can I Hold You with?*
 
-## 本地运行
+</div>
 
-```powershell
-npm start
+---
+
+## ✨ 它是什么
+
+《时间之外》是一个纯黑极简的网页应用。来访者可以走进一间黑暗的图书馆，与一位名为 **艾蕾塔** 的魔女进行开放式对话。
+
+它想做的事情很简单：**让被现实压得喘不过气的人，能在一段对谈里重新听见自己真实的热爱。**
+
+### 功能一览
+
+| 能力 | 说明 |
+|---|---|
+| 🖤 流式对话 | DeepSeek 流式回复 + 打字机效果 |
+| 🃏 塔罗占卜 | 记忆积累后解锁，三张牌结合你们的记忆解读 |
+| 📖 图书馆记忆 | 自动提炼你的喜好/压力/热爱/困扰，像她真的记住了你 |
+| 🔖 书签收藏 | 选中她的句子，收进你的图书馆 |
+| 🌙 idle 微状态 | 你沉默时，她也会轻声说话（可「离馆」暂停） |
+| 💌 回归情感弧 | 离开久了再回来，她会用不同的方式迎接你 |
+| 🎭 用户画像 | 她慢慢了解你的话题、心绪与称呼，亲近度自然增长 |
+| 🌧 环境音景 | 雨声 / 炉火 / 风声，可循环切换 |
+| 🎴 双布局 | 舞台（classic）/ 书卷（storybook）两种界面 |
+| 💾 存档导入导出 | 对话、记忆、心声进度一键备份 |
+
+## 🚀 快速开始
+
+### Web 开发模式
+
+```bash
+# 首次或改代码后构建
+flutter build web
+
+# 启动本地服务器（提供静态页面 + API 代理）
+node server.js
+# 或双击 start.bat 一键构建 + 启动 + 开浏览器
 ```
 
-然后打开：
+打开 <http://localhost:4173>
 
-```text
-http://localhost:4173
+> **注意：** Flutter SDK 若不在 PATH，请先将其 `bin/` 加入 PATH，或用项目根目录的 `start.bat`。
+
+### Windows 桌面版
+
+直接双击 `release/BeyondTime.exe` —— 自动启动服务并打开浏览器。
+
+重新打包（自动带 app 图标）：
+
+```bash
+flutter build web
+npm run build:windows-exe
+# 或一条龙：npm run release
 ```
 
-`npm start` 会继续提供 API 代理，并优先打开 Flutter 构建出的 `build/web` 页面。Flutter 的安装和构建方式之后再整理成更通用的说明。
+## ⚙️ API 设置
 
-## API 设置
+右上角 **设置**，填写：
 
-右上角点击 `设置`，填写：
+- **API Key**：DeepSeek 或任何兼容 OpenAI Chat Completions 的密钥
+- **API 地址**：默认 `https://api.deepseek.com/chat/completions`
+- **模型**：默认 `deepseek-v4-flash`
 
-- `API Key`：DeepSeek 或兼容 OpenAI Chat Completions 的密钥
-- `API 地址`：默认 `https://api.deepseek.com/chat/completions`
-- `模型`：默认 `deepseek-v4-flash`
-- `人设 Prompt`：这里不允许偷窥魔女的秘密。真正的人设文件在项目目录中维护
+设置、对话、记忆保存在浏览器 `localStorage`。部署到公网时建议改用服务端代理存储密钥。
 
-目前设置、对话、记忆和书签保存在浏览器 `localStorage` 中，也可以通过 `存档` 面板导出备份。若部署到公网，建议改成服务端环境变量或账号级配置，避免前端暴露密钥。
+## 🧙 关于艾蕾塔
 
-## 角色方向
+艾蕾塔是一位图书馆的魔女：黑长直、优雅、有教养、学识渊博，看问题一针见血。她有腹黑小恶魔式的挑逗感，却拥有温柔而强大的性格内核。
 
-艾蕾塔是一位图书馆的魔女：黑长直、优雅、有教养、学识渊博，看问题一针见血。她有腹黑小恶魔式的挑逗感，但拥有温柔而强大的性格内核。
+她不会鼓励你把一切痛苦都变成计划、效率和自我优化。她更关心你是否还能辨认自己的愿望，是否还保有那些不一定有用、却真正属于自己的热爱。
 
-她不会鼓励来访者把一切痛苦都变成计划、效率和自我优化。她更关心来访者是否还能辨认自己的愿望，是否还保有那些不一定有用、却真正属于自己的热爱。
-
-魔女的人设 Prompt 单独放在：
+人设 Prompt 单独维护于：
 
 ```text
 assets/prompts/ereta_persona.txt
 ```
 
-修改这个文件后，重新构建 Flutter Web 页面即可生效。
+修改后重新构建 Flutter Web 即可生效。
 
-未参与打包的大图原始素材保留在：
+## 🛠 技术栈
 
-```text
-assets/source/images
-```
+| 层 | 选型 |
+|---|---|
+| 前端 | Flutter Web，零第三方依赖 |
+| 平台 API | `dart:html`（XHR / localStorage / AudioElement） |
+| 代理 | 零依赖 Node.js 服务器 |
+| 桌面打包 | `@yao-pkg/pkg` SEA + `resedit` 图标 |
+| 部署 | 静态托管 / Cloudflare Workers（`sites/worker.js`） |
 
-## 后续想做
+## 📁 项目文档
 
-- 继续打磨魔女 Prompt，让她拥有更稳定的灵魂
-- 丰富心声选项，让玩家能用非理性的表达进入对话
-- 设计更完整的“避难所”循环，而不是普通聊天机器人
-- 加入更有仪式感的收藏、书页、诗歌或游戏创作玩法
-- 调整视觉与音乐，让它更像一个可以短暂停靠的地方
+详细的工程信息、架构说明与开发约定见 **[PROJECT.md](PROJECT.md)**。
 
-## 开发备注
+## 📜 致谢
 
-这是一个仍在形成中的小项目。它现在还粗糙、任性、没有完成，但它已经有了一个明确的方向：在时间之外，给人一点重新呼吸的空间。
+- 环境音效来自 [Muges/ambientsounds](https://github.com/Muges/ambientsounds)（CC0 / CC BY）
+- 字体：Cormorant Garamond · LXGW WenKai · Noto Serif SC（OFL）
 
+## 🌱 后续想做
+
+- 更稳定的魔女灵魂（打磨 Prompt）
+- 更完整的「避难所」循环，而非普通聊天机器人
+- 更有仪式感的收藏、书页、诗歌玩法
+- 让它更像一个可以短暂停靠的地方
+
+---
+
+*这是一个仍在形成中的小项目。它还粗糙、任性、没有完成，但它已经有了一个明确的方向：在时间之外，给人一点重新呼吸的空间。*

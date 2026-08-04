@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../config.dart';
 import '../models/chat_message.dart';
 import '../models/library_memory_item.dart';
+import '../models/user_profile.dart';
 import 'local_store.dart';
 
 class StoreHelper {
@@ -102,5 +103,28 @@ class StoreHelper {
 
   void deleteQuickOptionPoolIndex() {
     _store.delete(kQuickCountKey);
+  }
+
+  String? loadLastVisit() {
+    return _store.read(kLastVisitKey);
+  }
+
+  void saveLastVisit(String timestamp) {
+    _store.write(kLastVisitKey, timestamp);
+  }
+
+  UserProfile? loadUserProfile() {
+    final raw = _store.read(kUserProfileKey);
+    if (raw == null) return null;
+    try {
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      return UserProfile.fromJson(data);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void saveUserProfile(UserProfile profile) {
+    _store.write(kUserProfileKey, jsonEncode(profile.toJson()));
   }
 }
