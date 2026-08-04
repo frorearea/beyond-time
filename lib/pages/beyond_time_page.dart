@@ -970,7 +970,7 @@ class _StorybookTitle extends StatelessWidget {
                   letterSpacing: compact ? 4 : 6,
                   fontWeight: FontWeight.w400,
                   fontFamily: 'NotoSerifSC',
-                  fontFamilyFallback: const ['STSong', 'SimSun', 'STKaiti', 'LXGWWenKai'],
+                  fontFamilyFallback: const ['STSong', 'SimSun', 'STKaiti'],
                   color: const Color(0xF0FFFFFF),
                   shadows: const [
                     Shadow(

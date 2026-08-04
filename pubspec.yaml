@@ -26,7 +26,7 @@ flutter:
         - asset: assets/fonts/CormorantGaramond-Italic.ttf
     - family: LXGWWenKai
       fonts:
-        - asset: assets/fonts/LXGWWenKai-Regular.ttf
+        - asset: assets/fonts/LXGWWenKai-subset.ttf
     - family: NotoSerifSC
       fonts:
-        - asset: assets/fonts/NotoSerifSC-VF.ttf
+        - asset: assets/fonts/NotoSerifSC-subset.ttf
