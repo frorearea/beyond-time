@@ -9,12 +9,16 @@ class Composer extends StatelessWidget {
     required this.disabled,
     required this.onSend,
     required this.onClear,
+    required this.quickCollapsed,
+    required this.onQuickCollapseToggle,
   });
 
   final TextEditingController inputController;
   final bool disabled;
   final Future<void> Function() onSend;
   final VoidCallback onClear;
+  final bool quickCollapsed;
+  final VoidCallback onQuickCollapseToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +58,10 @@ class Composer extends StatelessWidget {
               onTap: disabled ? null : onSend,
             ),
             BorderTextButton(label: '清空', onTap: onClear),
+            CollapseQuickButton(
+              collapsed: quickCollapsed,
+              onTap: onQuickCollapseToggle,
+            ),
           ],
         ),
       ),
@@ -87,4 +95,61 @@ class BorderTextButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class CollapseQuickButton extends StatelessWidget {
+  const CollapseQuickButton({super.key, required this.collapsed, required this.onTap});
+
+  final bool collapsed;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        width: 28,
+        alignment: Alignment.center,
+        decoration: const BoxDecoration(
+          border: Border(left: BorderSide(color: Color(0xCCFFFFFF))),
+        ),
+        child: CustomPaint(
+          size: const Size(10, 6),
+          painter: CollapseArrowPainter(collapsed: collapsed),
+        ),
+      ),
+    );
+  }
+}
+
+class CollapseArrowPainter extends CustomPainter {
+  const CollapseArrowPainter({required this.collapsed});
+
+  final bool collapsed;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = kWhite
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final path = Path();
+    if (collapsed) {
+      path.moveTo(1, 1);
+      path.lineTo(size.width / 2, size.height - 1);
+      path.lineTo(size.width - 1, 1);
+    } else {
+      path.moveTo(1, size.height - 1);
+      path.lineTo(size.width / 2, 1);
+      path.lineTo(size.width - 1, size.height - 1);
+    }
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CollapseArrowPainter oldDelegate) =>
+      oldDelegate.collapsed != collapsed;
 }

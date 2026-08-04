@@ -99,7 +99,7 @@ class WitchPortrait extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Image.asset(
-      'assets/images/ereta-cropped-display.png',
+      'assets/images/ereta-cropped-display.webp',
       fit: BoxFit.contain,
       width: 760,
       filterQuality: FilterQuality.high,

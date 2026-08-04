@@ -7,70 +7,46 @@ class QuickOptions extends StatelessWidget {
     super.key,
     required this.options,
     required this.disabled,
+    required this.collapsed,
     required this.onTap,
     required this.onRefresh,
   });
 
   final List<String> options;
   final bool disabled;
+  final bool collapsed;
   final ValueChanged<String> onTap;
   final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
+    if (collapsed) return const SizedBox.shrink();
     return Container(
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Color(0xCCFFFFFF))),
       ),
       padding: const EdgeInsets.all(12),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth < 650) {
-            return GridView.count(
-              crossAxisCount: 1,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-              childAspectRatio: 8,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                for (final option in options)
-                  QuickOptionButton(
-                    label: option,
-                    disabled: disabled,
-                    onTap: () => onTap(option),
-                  ),
-                RefreshOptionsButton(disabled: disabled, onTap: onRefresh),
-              ],
-            );
-          }
-
-          return SizedBox(
-            height: 48,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final option in options) ...[
-                  Expanded(
-                    child: QuickOptionButton(
-                      label: option,
-                      disabled: disabled,
-                      onTap: () => onTap(option),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                SizedBox(
-                  width: 78,
-                  child: RefreshOptionsButton(
-                    disabled: disabled,
-                    onTap: onRefresh,
-                  ),
+      child: SizedBox(
+        height: 40,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final option in options) ...[
+              Expanded(
+                child: QuickOptionButton(
+                  label: option,
+                  disabled: disabled,
+                  onTap: () => onTap(option),
                 ),
-              ],
+              ),
+              const SizedBox(width: 8),
+            ],
+            RefreshOptionsButton(
+              disabled: disabled,
+              onTap: onRefresh,
             ),
-          );
-        },
+          ],
+        ),
       ),
     );
   }
@@ -120,19 +96,22 @@ class RefreshOptionsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: disabled ? null : onTap,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: kWhite,
-        side: const BorderSide(color: Color(0x99FFFFFF)),
-        shape: const RoundedRectangleBorder(),
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-      ),
-      child: const Text(
-        '换一组',
-        textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 13, height: 1.15),
+    return SizedBox(
+      width: 64,
+      child: OutlinedButton(
+        onPressed: disabled ? null : onTap,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: kWhite,
+          side: const BorderSide(color: Color(0x99FFFFFF)),
+          shape: const RoundedRectangleBorder(),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        ),
+        child: const Text(
+          '换一组',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13, height: 1.15),
+        ),
       ),
     );
   }

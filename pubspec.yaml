@@ -16,7 +16,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/images/ereta-cropped-display.png
+    - assets/images/ereta-cropped-display.webp
     - assets/prompts/ereta_persona.txt
     - assets/sounds/
 

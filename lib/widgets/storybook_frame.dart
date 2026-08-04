@@ -80,7 +80,7 @@ class StorybookPortraitPanel extends StatelessWidget {
                 showQuote ? 86 : 8,
               ),
               child: Image.asset(
-                'assets/images/ereta-cropped-display.png',
+                'assets/images/ereta-cropped-display.webp',
                 fit: BoxFit.contain,
                 alignment: Alignment.bottomCenter,
                 filterQuality: FilterQuality.high,

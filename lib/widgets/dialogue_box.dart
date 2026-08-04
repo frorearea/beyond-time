@@ -48,6 +48,7 @@ class _DialogueBoxState extends State<DialogueBox> {
   final GlobalKey _boxKey = GlobalKey();
   OverlayEntry? _bookmarkOverlay;
   Timer? _selectionClearTimer;
+  bool _quickCollapsed = false;
 
   @override
   void dispose() {
@@ -202,6 +203,7 @@ class _DialogueBoxState extends State<DialogueBox> {
                 QuickOptions(
                   options: widget.quickOptions,
                   disabled: widget.isSending,
+                  collapsed: _quickCollapsed,
                   onTap: widget.onQuickOption,
                   onRefresh: widget.onRefreshQuickOptions,
                 ),
@@ -210,6 +212,10 @@ class _DialogueBoxState extends State<DialogueBox> {
                   disabled: widget.isSending,
                   onSend: widget.onSend,
                   onClear: widget.onClear,
+                  quickCollapsed: _quickCollapsed,
+                  onQuickCollapseToggle: () {
+                    setState(() => _quickCollapsed = !_quickCollapsed);
+                  },
                 ),
               ],
             ),
