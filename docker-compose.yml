@@ -1,0 +1,16 @@
+# 时间之外 · Beyond Time — NAS 部署
+# 两种用法：
+#   1) 本机构建好 build/web 后：docker compose up -d --build
+#   2) 想让容器不含构建产物、直接复用宿主机目录：把下方 build 块删掉，
+#      volumes 挂 .:/app 即可（免构建镜像，飞牛 UI 点选 node:20-alpine）。
+services:
+  beyond-time:
+    build: .
+    image: beyond-time:latest
+    container_name: beyond-time
+    restart: unless-stopped
+    ports:
+      - "4173:4173"
+    environment:
+      # 留空则进页面后手动填（server.js 同时支持请求体与环境变量两路）
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}

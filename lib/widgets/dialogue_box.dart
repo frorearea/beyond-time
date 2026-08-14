@@ -17,6 +17,7 @@ class DialogueBox extends StatefulWidget {
     required this.messages,
     required this.isSending,
     required this.quickOptions,
+    required this.showQuickOptions,
     required this.inputController,
     required this.scrollController,
     required this.onSend,
@@ -30,6 +31,7 @@ class DialogueBox extends StatefulWidget {
   final List<ChatMessage> messages;
   final bool isSending;
   final List<String> quickOptions;
+  final bool showQuickOptions;
   final TextEditingController inputController;
   final ScrollController scrollController;
   final Future<void> Function() onSend;
@@ -200,13 +202,14 @@ class _DialogueBoxState extends State<DialogueBox> {
                     ),
                   ),
                 ),
-                QuickOptions(
-                  options: widget.quickOptions,
-                  disabled: widget.isSending,
-                  collapsed: _quickCollapsed,
-                  onTap: widget.onQuickOption,
-                  onRefresh: widget.onRefreshQuickOptions,
-                ),
+                if (widget.showQuickOptions)
+                  QuickOptions(
+                    options: widget.quickOptions,
+                    disabled: widget.isSending,
+                    collapsed: _quickCollapsed,
+                    onTap: widget.onQuickOption,
+                    onRefresh: widget.onRefreshQuickOptions,
+                  ),
                 Composer(
                   inputController: widget.inputController,
                   disabled: widget.isSending,

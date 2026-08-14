@@ -1,0 +1,6 @@
+*
+!server.js
+!package.json
+!build
+!build/web
+!build/web/**

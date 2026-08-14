@@ -62,6 +62,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   int _memoryCaptureCooldown = 0;
   bool _isMemoryCaptureRunning = false;
   String _uiLayout = 'storybook';
+  bool _showQuickOptions = false;
   Timer? _idleTimer;
   bool _isAway = false;
   late UserProfile _userProfile;
@@ -134,6 +135,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
                                     messages: _messages,
                                     isSending: _isSending,
                                     quickOptions: _currentQuickOptions(),
+                                    showQuickOptions: _showQuickOptions,
                                     inputController: _inputController,
                                     scrollController: _messageScrollController,
                                     onSend: _sendCurrentText,
@@ -210,6 +212,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
           messages: _messages,
           isSending: _isSending,
           quickOptions: _currentQuickOptions(),
+          showQuickOptions: _showQuickOptions,
           inputController: _inputController,
           scrollController: _messageScrollController,
           onSend: _sendCurrentText,
@@ -599,6 +602,10 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
             onLayoutChanged: (layout) {
               setState(() => _uiLayout = layout);
             },
+            showQuickOptions: _showQuickOptions,
+            onQuickOptionsChanged: (value) {
+              setState(() => _showQuickOptions = value);
+            },
             onSave: () {
               _saveSettings();
               Navigator.of(context).pop();
@@ -609,6 +616,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
                 _apiUrlController.text = kDefaultApiUrl;
                 _modelController.text = kDefaultModel;
                 _uiLayout = 'classic';
+                _showQuickOptions = false;
               });
               _saveSettings();
             },
@@ -804,6 +812,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     _apiUrlController.text = settings['apiUrl'] ?? kDefaultApiUrl;
     _modelController.text = settings['model'] ?? kDefaultModel;
     _uiLayout = settings['uiLayout'] ?? 'storybook';
+    _showQuickOptions = settings['showQuickOptions'] == 'true';
     _quickOptionPoolIndex = _storeHelper.loadQuickOptionPoolIndex();
   }
 
@@ -813,6 +822,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
       _apiUrlController.text.trim(),
       _modelController.text.trim(),
       uiLayout: _uiLayout,
+      showQuickOptions: _showQuickOptions,
     );
   }
 

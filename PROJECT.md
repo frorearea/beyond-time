@@ -134,6 +134,11 @@ dart tool/profile_test.dart
 - 国内直连慢，需代理才能流畅加载
 - 线上对话直连 DeepSeek 可能遇 CORS；待办：配 Cloudflare Worker 代理（已配置 wrangler.toml + workflow + secrets，**当前搁置**，等有域名再启用）
 
+### 部署（Docker）
+- 先本地 `flutter build web`，再 `docker compose up -d --build`（免 `npm install`，运行时零依赖）
+- 提供 `Dockerfile` / `docker-compose.yml` / `.dockerignore`；API Key 走环境变量 `DEEPSEEK_API_KEY` 或页面填写
+- 本机跑不通需先 `sudo usermod -aG docker $USER` 后重登
+
 ### 性能优化记录（2026-08-04）
 - 总构建体积：99.7MB → **~48MB**
 - 中文字体子集化：LXGWWenKai 25MB→12KB（诗句子集）、NotoSerifSC 24MB→4KB（标题子集）；魔女回复改系统宋体、用户消息系统黑体

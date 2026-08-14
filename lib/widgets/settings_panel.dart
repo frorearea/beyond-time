@@ -10,6 +10,8 @@ class SettingsPanel extends StatefulWidget {
     required this.modelController,
     required this.uiLayout,
     required this.onLayoutChanged,
+    required this.showQuickOptions,
+    required this.onQuickOptionsChanged,
     required this.onSave,
     required this.onReset,
   });
@@ -19,6 +21,8 @@ class SettingsPanel extends StatefulWidget {
   final TextEditingController modelController;
   final String uiLayout;
   final ValueChanged<String> onLayoutChanged;
+  final bool showQuickOptions;
+  final ValueChanged<bool> onQuickOptionsChanged;
   final VoidCallback onSave;
   final VoidCallback onReset;
 
@@ -83,6 +87,21 @@ class _SettingsPanelState extends State<SettingsPanel> {
             LayoutChoice(
               value: _selectedLayout,
               onChanged: _changeLayout,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('心声选项', style: TextStyle(color: kWhite, fontSize: 13)),
+                Switch(
+                  value: widget.showQuickOptions,
+                  onChanged: widget.onQuickOptionsChanged,
+                  activeTrackColor: kWhite,
+                  activeThumbColor: kBlack,
+                  inactiveTrackColor: const Color(0x66FFFFFF),
+                  inactiveThumbColor: kWhite,
+                ),
+              ],
             ),
             const SizedBox(height: 20),
             const Text('人设 Prompt',

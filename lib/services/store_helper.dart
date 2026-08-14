@@ -20,6 +20,7 @@ class StoreHelper {
       'apiUrl': data['apiUrl']?.toString() ?? kDefaultApiUrl,
       'model': data['model']?.toString() ?? kDefaultModel,
       'uiLayout': data['uiLayout']?.toString() ?? 'classic',
+      'showQuickOptions': data['showQuickOptions'] == true ? 'true' : 'false',
     };
   }
 
@@ -28,6 +29,7 @@ class StoreHelper {
     String apiUrl,
     String model, {
     String uiLayout = 'classic',
+    bool showQuickOptions = false,
   }) {
     _store.write(
       kSettingsKey,
@@ -36,6 +38,7 @@ class StoreHelper {
         'apiUrl': apiUrl,
         'model': model,
         'uiLayout': uiLayout,
+        'showQuickOptions': showQuickOptions,
       }),
     );
   }
