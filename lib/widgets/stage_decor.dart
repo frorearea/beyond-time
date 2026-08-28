@@ -127,26 +127,31 @@ class SloganQuote extends StatelessWidget {
                   '“',
                   style: TextStyle(
                     color: Color(0xBFFFFFFF),
-                    fontSize: 34,
+                    fontSize: 26,
                     height: 1,
                     fontFamily: 'Georgia',
                   ),
                 ),
                 Expanded(
-                  child: Text(
-                    'I offer you the bitterness of a man who has looked long and long at the lonely moon.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Color(0xE8FFFFFF),
-                      fontSize: 20,
-                      height: 1.18,
-                      fontStyle: FontStyle.italic,
-                      fontFamily: 'CormorantGaramond',
-                      fontFamilyFallback: [
-                        'Palatino Linotype',
-                        'Georgia',
-                        'Times New Roman',
-                      ],
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.center,
+                    child: Text(
+                      'I offer you the bitterness of a man who has looked long and long at the lonely moon.',
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      style: TextStyle(
+                        color: Color(0xE8FFFFFF),
+                        fontSize: 12,
+                        height: 1.18,
+                        fontStyle: FontStyle.italic,
+                        fontFamily: 'CormorantGaramond',
+                        fontFamilyFallback: [
+                          'Palatino Linotype',
+                          'Georgia',
+                          'Times New Roman',
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -154,7 +159,7 @@ class SloganQuote extends StatelessWidget {
                   '”',
                   style: TextStyle(
                     color: Color(0xBFFFFFFF),
-                    fontSize: 34,
+                    fontSize: 26,
                     height: 1,
                     fontFamily: 'Georgia',
                   ),
@@ -167,22 +172,13 @@ class SloganQuote extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Color(0xDDFFFFFF),
-                fontSize: 14,
+                fontSize: 12,
                 height: 1.42,
                 fontFamily: 'LXGWWenKai',
                 fontFamilyFallback: [
                   'Microsoft YaHei',
                   'SimSun',
                 ],
-              ),
-            ),
-            SizedBox(height: 4),
-            Text(
-              'What Can I Hold You with?',
-              style: TextStyle(
-                color: Color(0x7AFFFFFF),
-                fontSize: 11,
-                letterSpacing: 0,
               ),
             ),
           ],

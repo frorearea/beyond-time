@@ -10,6 +10,7 @@ class QuickOptions extends StatelessWidget {
     required this.collapsed,
     required this.onTap,
     required this.onRefresh,
+    this.compact = false,
   });
 
   final List<String> options;
@@ -17,6 +18,7 @@ class QuickOptions extends StatelessWidget {
   final bool collapsed;
   final ValueChanged<String> onTap;
   final VoidCallback onRefresh;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +38,7 @@ class QuickOptions extends StatelessWidget {
                 child: QuickOptionButton(
                   label: option,
                   disabled: disabled,
+                  compact: compact,
                   onTap: () => onTap(option),
                 ),
               ),
@@ -43,6 +46,7 @@ class QuickOptions extends StatelessWidget {
             ],
             RefreshOptionsButton(
               disabled: disabled,
+              compact: compact,
               onTap: onRefresh,
             ),
           ],
@@ -58,11 +62,13 @@ class QuickOptionButton extends StatelessWidget {
     required this.label,
     required this.disabled,
     required this.onTap,
+    this.compact = false,
   });
 
   final String label;
   final bool disabled;
   final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +84,12 @@ class QuickOptionButton extends StatelessWidget {
       child: Text(
         label,
         textAlign: TextAlign.left,
-        style: const TextStyle(fontSize: 14, height: 1.35),
+        maxLines: compact ? 1 : null,
+        overflow: compact ? TextOverflow.ellipsis : null,
+        style: TextStyle(
+          fontSize: compact ? 12 : 14,
+          height: 1.35,
+        ),
       ),
     );
   }
@@ -89,10 +100,12 @@ class RefreshOptionsButton extends StatelessWidget {
     super.key,
     required this.disabled,
     required this.onTap,
+    this.compact = false,
   });
 
   final bool disabled;
   final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -107,10 +120,15 @@ class RefreshOptionsButton extends StatelessWidget {
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         ),
-        child: const Text(
+        child: Text(
           '换一组',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 13, height: 1.15),
+          maxLines: compact ? 1 : null,
+          overflow: compact ? TextOverflow.ellipsis : null,
+          style: TextStyle(
+            fontSize: compact ? 12 : 13,
+            height: 1.15,
+          ),
         ),
       ),
     );

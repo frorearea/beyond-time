@@ -1,7 +1,7 @@
 # 时间之外 · Beyond Time — 项目主文档
 
 > **本文件是项目唯一权威文档。** 每次修改代码前先读本文件；功能新增、删除、重命名、架构调整后必须同步更新本文件。
-> 最后更新：2026-08-04
+> 最后更新：2026-08-28
 
 ---
 
@@ -35,6 +35,7 @@
 | 动态光影 | 魔女立像背后烛光呼吸动画 | `lib/widgets/candle_glow.dart` |
 | 环境语隔离 | idle/离馆/回归台词标记 `isAmbient`：页面至多一条、不入存档 | `lib/models/chat_message.dart`、`_persistHistory` |
 | 桌面版 | SEA 打包 exe，自动起服务+开浏览器 | `scripts/build-windows-bundle.js` |
+| 经典布局 UI（仅 classic「上下」生效，不影响卷轴） | SloganQuote 缩小中英字号、删去 "What Can I Hold You" 标题行；心声选项单行紧凑（12 号字，超长省略号）；去掉左上角咖啡杯+热气装饰 | `lib/widgets/stage_decor.dart`、`lib/widgets/quick_options.dart`、`lib/widgets/dialogue_box.dart` |
 
 ### 待办/可探索方向（按优先级）
 - 记忆相关性检索（目前是最近 12 条倒序注入，可升级为按话题打分取 Top-N）

@@ -209,6 +209,7 @@ class _DialogueBoxState extends State<DialogueBox> {
                     collapsed: _quickCollapsed,
                     onTap: widget.onQuickOption,
                     onRefresh: widget.onRefreshQuickOptions,
+                    compact: !widget.storybookMode,
                   ),
                 Composer(
                   inputController: widget.inputController,
@@ -224,8 +225,6 @@ class _DialogueBoxState extends State<DialogueBox> {
             ),
           ),
         ),
-        if (!widget.storybookMode)
-          const Positioned(left: 18, top: -52, child: CoffeeCup()),
         if (!widget.storybookMode && widget.isSending)
           const Positioned(right: 18, top: -42, child: WritingIndicator()),
       ],
