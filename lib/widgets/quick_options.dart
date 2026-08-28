@@ -23,6 +23,7 @@ class QuickOptions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (collapsed) return const SizedBox.shrink();
+    final displayOptions = compact ? options.take(1).toList() : options;
     return Container(
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Color(0xCCFFFFFF))),
@@ -33,7 +34,7 @@ class QuickOptions extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final option in options) ...[
+            for (final option in displayOptions) ...[
               Expanded(
                 child: QuickOptionButton(
                   label: option,
@@ -121,7 +122,7 @@ class RefreshOptionsButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         ),
         child: Text(
-          '换一组',
+          compact ? '换一个' : '换一组',
           textAlign: TextAlign.center,
           maxLines: compact ? 1 : null,
           overflow: compact ? TextOverflow.ellipsis : null,

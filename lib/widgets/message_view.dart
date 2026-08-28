@@ -10,10 +10,12 @@ class MessageView extends StatelessWidget {
     super.key,
     required this.message,
     required this.onAssistantSelection,
+    this.compact = false,
   });
 
   final ChatMessage message;
   final ValueChanged<String> onAssistantSelection;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +23,7 @@ class MessageView extends StatelessWidget {
     final content = _displayContent(message.content);
     final style = TextStyle(
       color: kWhite,
-      fontSize: isPlayer ? 18 : 19,
+      fontSize: compact ? (isPlayer ? 15 : 16) : (isPlayer ? 18 : 19),
       height: isPlayer ? 1.5 : 1.48,
       fontFamily: isPlayer ? 'SimHei' : 'LXGWWenKai',
       fontFamilyFallback: isPlayer

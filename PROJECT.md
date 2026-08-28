@@ -35,7 +35,7 @@
 | 动态光影 | 魔女立像背后烛光呼吸动画 | `lib/widgets/candle_glow.dart` |
 | 环境语隔离 | idle/离馆/回归台词标记 `isAmbient`：页面至多一条、不入存档 | `lib/models/chat_message.dart`、`_persistHistory` |
 | 桌面版 | SEA 打包 exe，自动起服务+开浏览器 | `scripts/build-windows-bundle.js` |
-| 经典布局 UI（仅 classic「上下」生效，不影响卷轴） | SloganQuote 缩小中英字号、删去 "What Can I Hold You" 标题行；心声选项单行紧凑（12 号字，超长省略号）；去掉左上角咖啡杯+热气装饰 | `lib/widgets/stage_decor.dart`、`lib/widgets/quick_options.dart`、`lib/widgets/dialogue_box.dart` |
+| 经典布局 UI（仅 classic「上下」生效，不影响卷轴） | SloganQuote 缩小中英字号、删去 "What Can I Hold You" 标题行；心声选项单行紧凑（12 号字，超长省略号），且只显示 1 条、刷新按钮「换一组」→「换一个」；对话字号调小（用户 15 / 艾蕾塔 16）；去掉左上角咖啡杯+热气装饰；设置内心声开关改用本地 state 以正确显示当前状态 | `lib/widgets/stage_decor.dart`、`lib/widgets/quick_options.dart`、`lib/widgets/dialogue_box.dart`、`lib/widgets/message_view.dart`、`lib/widgets/settings_panel.dart` |
 
 ### 待办/可探索方向（按优先级）
 - 记忆相关性检索（目前是最近 12 条倒序注入，可升级为按话题打分取 Top-N）

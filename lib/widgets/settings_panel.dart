@@ -33,11 +33,13 @@ class SettingsPanel extends StatefulWidget {
 class _SettingsPanelState extends State<SettingsPanel> {
   bool _warned = false;
   late String _selectedLayout;
+  late bool _showQuickOptions;
 
   @override
   void initState() {
     super.initState();
     _selectedLayout = widget.uiLayout;
+    _showQuickOptions = widget.showQuickOptions;
   }
 
   void _changeLayout(String layout) {
@@ -94,8 +96,11 @@ class _SettingsPanelState extends State<SettingsPanel> {
               children: [
                 const Text('心声选项', style: TextStyle(color: kWhite, fontSize: 13)),
                 Switch(
-                  value: widget.showQuickOptions,
-                  onChanged: widget.onQuickOptionsChanged,
+                  value: _showQuickOptions,
+                  onChanged: (value) {
+                    setState(() => _showQuickOptions = value);
+                    widget.onQuickOptionsChanged(value);
+                  },
                   activeTrackColor: kWhite,
                   activeThumbColor: kBlack,
                   inactiveTrackColor: const Color(0x66FFFFFF),
