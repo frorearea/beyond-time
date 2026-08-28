@@ -64,7 +64,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   String _uiLayout = 'storybook';
   bool _showQuickOptions = false;
   Timer? _idleTimer;
-  bool _isAway = false;
+  bool _idleDone = false;
   late UserProfile _userProfile;
 
   @override
@@ -175,14 +175,10 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
                               TopTextButton(
                                   label: '存档', onTap: _openArchivePanel),
                               const SizedBox(width: 18),
-                              TopTextButton(
-                                  label: '设置', onTap: _openSettings),
-                              const SizedBox(width: 18),
                               const SoundControl(),
                               const SizedBox(width: 18),
                               TopTextButton(
-                                  label: _isAway ? '回来' : '离馆',
-                                  onTap: _toggleAway),
+                                  label: '设置', onTap: _openSettings),
                             ],
                           ),
                         ),
@@ -271,11 +267,9 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
       children: [
         TopTextButton(label: '存档', onTap: _openArchivePanel),
         const SizedBox(width: 14),
-        TopTextButton(label: '设置', onTap: _openSettings),
-        const SizedBox(width: 14),
         const SoundControl(),
         const SizedBox(width: 14),
-        TopTextButton(label: _isAway ? '回来' : '离馆', onTap: _toggleAway),
+        TopTextButton(label: '设置', onTap: _openSettings),
       ],
     );
 
@@ -427,9 +421,6 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     int maxTokens = 520,
   }) async {
     if (_isSending) return;
-    if (_isAway) {
-      _isAway = false;
-    }
     _startIdleTimer();
     text = text.trim();
     if (text.isEmpty) return;
@@ -875,40 +866,14 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   }
 
   void _startIdleTimer() {
+    if (_idleDone) return;
     _idleTimer?.cancel();
-    if (_isAway) return;
-    _idleTimer = Timer(const Duration(minutes: 3), _fireIdleLine);
-  }
-
-  void _toggleAway() {
-    _isAway = !_isAway;
-    if (_isAway) {
-      _idleTimer?.cancel();
-      final line = (List<String>.of(kLeaveLines)..shuffle(math.Random())).first;
-      setState(() {
-        _messages = [
-          ..._messages.where((message) => !message.isAmbient),
-          ChatMessage(role: 'assistant', content: line, isAmbient: true),
-        ];
-      });
-      _persistHistory();
-      _scrollToBottom();
-    } else {
-      _startIdleTimer();
-      final line = (List<String>.of(kReturnShortLines)..shuffle(math.Random())).first;
-      setState(() {
-        _messages = [
-          ..._messages.where((message) => !message.isAmbient),
-          ChatMessage(role: 'assistant', content: line, isAmbient: true),
-        ];
-      });
-      _persistHistory();
-      _scrollToBottom();
-    }
+    _idleTimer = Timer(const Duration(minutes: 5), _fireIdleLine);
   }
 
   void _fireIdleLine() {
     if (!mounted || _isSending) return;
+    _idleDone = true;
     final line = (List<String>.of(kIdleLines)..shuffle(math.Random())).first;
     setState(() {
       _messages = [
@@ -918,10 +883,9 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
     });
     _persistHistory();
     _scrollToBottom();
-    _startIdleTimer();
   }
 
-  /// 存档时剔除环境台词（idle / 离馆 / 回归语），不污染真实对话记录。
+  /// 存档时剔除环境台词，不污染真实对话记录。
   void _persistHistory() {
     _storeHelper.saveHistory(
       _messages.where((message) => !message.isAmbient).toList(),

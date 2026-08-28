@@ -177,6 +177,7 @@ class _DialogueBoxState extends State<DialogueBox> {
                                     message: widget.messages[index],
                                     onAssistantSelection:
                                         _handleAssistantSelection,
+                                    compact: !widget.storybookMode,
                                   ),
                                   separatorBuilder: (context, index) =>
                                       const SizedBox(height: 11),

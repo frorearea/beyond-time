@@ -4,7 +4,7 @@ class ChatMessage {
   final String role;
   final String content;
 
-  /// 环境台词（如 idle 场景语）标记：不进入对话存档，同一时刻页面至多保留一条。
+  /// 环境台词标记：不进入对话存档，同一时刻页面至多保留一条。
   final bool isAmbient;
 
   Map<String, String> toJson() => {'role': role, 'content': content};

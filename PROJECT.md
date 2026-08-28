@@ -1,7 +1,7 @@
 # 时间之外 · Beyond Time — 项目主文档
 
 > **本文件是项目唯一权威文档。** 每次修改代码前先读本文件；功能新增、删除、重命名、架构调整后必须同步更新本文件。
-> 最后更新：2026-08-28
+> 最后更新：2026-08-29
 
 ---
 
@@ -29,11 +29,11 @@
 | 存档/恢复 | 对话+记忆+心声进度 JSON 导入导出 | `lib/services/archive_service_*.dart` |
 | 双布局 | classic（舞台）/ storybook（书卷），宽度 <640 自动降级 | `lib/pages/beyond_time_page.dart` |
 | 用户个性化画像 | 话题/情绪/称呼/亲近度规则分析，注入 system prompt | `lib/models/user_profile.dart` |
-| idle 微状态 | 无操作 3 分钟后艾蕾塔随机环境台词（可「离馆」暂停） | `lib/data/idle_lines.dart`、`_fireIdleLine` |
+| idle 微状态 | 无操作 5 分钟后艾蕾塔随机环境台词（仅触发一次，不再循环） | `lib/data/idle_lines.dart`、`_fireIdleLine` |
 | 回归情感弧 | 3h/1d/1w/1m 四档回归台词（lastVisit 时间戳） | `lib/data/return_lines.dart`、`_checkReturnGreeting` |
 | 环境音景 | 雨/炉火/风声（真实 OGG 录音），点击循环切换 | `lib/services/ambient_sound_web.dart` |
 | 动态光影 | 魔女立像背后烛光呼吸动画 | `lib/widgets/candle_glow.dart` |
-| 环境语隔离 | idle/离馆/回归台词标记 `isAmbient`：页面至多一条、不入存档 | `lib/models/chat_message.dart`、`_persistHistory` |
+| 环境语隔离 | idle/回归环境台词标记 `isAmbient`：页面至多一条、不入存档 | `lib/models/chat_message.dart`、`_persistHistory` |
 | 桌面版 | SEA 打包 exe，自动起服务+开浏览器 | `scripts/build-windows-bundle.js` |
 | 经典布局 UI（仅 classic「上下」生效，不影响卷轴） | SloganQuote 缩小中英字号、删去 "What Can I Hold You" 标题行；心声选项单行紧凑（12 号字，超长省略号），且只显示 1 条、刷新按钮「换一组」→「换一个」；对话字号调小（用户 15 / 艾蕾塔 16）；去掉左上角咖啡杯+热气装饰；设置内心声开关改用本地 state 以正确显示当前状态 | `lib/widgets/stage_decor.dart`、`lib/widgets/quick_options.dart`、`lib/widgets/dialogue_box.dart`、`lib/widgets/message_view.dart`、`lib/widgets/settings_panel.dart` |
 
@@ -123,8 +123,8 @@ dart tool/profile_test.dart
 ### 运行时行为
 - API 配置存 localStorage（`beyondTimeFlutterSettings`）；`server.js` 本地代理 /api/chat
 - 线上环境（GitHub Pages 等）仅 localhost 走 `/api/chat` 代理，其余直连 API；Cloudflare 域名（`.workers.dev`/`.pages.dev`）也走代理（见 `chat_api_web.dart` 的 hostname 判断）
-- idle 定时器 3 分钟；「离馆」暂停 idle；用户发消息自动"回来"
-- 环境语（idle/离馆/回归）标记 `isAmbient`：**页面同时至多一条，且不写入存档**
+- idle 定时器 5 分钟，仅触发一次（由 `_idleDone` 控制），用户发消息会重置计时
+- 回归语（`_checkReturnGreeting`）：按 lastVisit 时间触发一次问候；idle/回归环境语标记 `isAmbient`：**页面同时至多一条，且不写入存档**
 - 用户画像：消息 ≥3 条才注入；亲近度 = 天数/轮数四档
 - 心声选项可折叠（Composer 行「清空」右侧小方块按钮）
 
@@ -169,3 +169,4 @@ dart tool/profile_test.dart
 5. `release/web` 每次打包会覆盖；手改 `release/web` 无效，改 `build/web` 来源
 6. 本地构建**不要**带 `--base-href`（会覆盖本地产物为 GitHub Pages 路径）；GitHub Pages 的 base-href 由 CI 单独构建
 7. 打包 exe 依赖 npm 包 `@yao-pkg/pkg` + `resedit`，若 `node_modules` 被清需先 `npm install`
+8. 对话输入框当前为单行固定高度（58px）。曾尝试 `TextField maxLines: 4` 自动换行，但因外层 Column 给非弹性子项无限高度约束，Composer 被撑满整页，已回退；多行输入待另寻方案（如给 Composer 加显式高度约束或改用独立滚动容器）

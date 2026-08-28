@@ -17,6 +17,7 @@ class ConversationContext {
     final visibleMessages = messages
         .where((message) => message.content.trim().isNotEmpty)
         .where((message) => !isBookmarkNoticeMessage(message))
+        .where((message) => !message.isAmbient)
         .toList();
     final history = visibleMessages
         .skip(math.max(0, visibleMessages.length - 80))
