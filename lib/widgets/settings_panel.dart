@@ -75,65 +75,80 @@ class _SettingsPanelState extends State<SettingsPanel> {
               ],
             ),
             const SizedBox(height: 24),
-            SettingsField(
-                label: 'API Key',
-                controller: widget.apiKeyController,
-                obscure: true),
-            SettingsField(label: 'API 地址', controller: widget.apiUrlController),
-            SettingsField(label: '模型', controller: widget.modelController),
-            const Text(
-              '界面布局',
-              style: TextStyle(color: kWhite, fontSize: 13),
-            ),
-            const SizedBox(height: 8),
-            LayoutChoice(
-              value: _selectedLayout,
-              onChanged: _changeLayout,
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('心声选项', style: TextStyle(color: kWhite, fontSize: 13)),
-                Switch(
-                  value: _showQuickOptions,
-                  onChanged: (value) {
-                    setState(() => _showQuickOptions = value);
-                    widget.onQuickOptionsChanged(value);
-                  },
-                  activeTrackColor: kWhite,
-                  activeThumbColor: kBlack,
-                  inactiveTrackColor: const Color(0x66FFFFFF),
-                  inactiveThumbColor: kWhite,
+            // 面板内容在矮窗口（例如 1280x600 的浏览器）会超出可视高度。
+            // 这里让中段可滚动，页眉与「重置/保存」始终留在原位。
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SettingsField(
+                        label: 'API Key',
+                        controller: widget.apiKeyController,
+                        obscure: true),
+                    SettingsField(
+                        label: 'API 地址', controller: widget.apiUrlController),
+                    SettingsField(
+                        label: '模型', controller: widget.modelController),
+                    const Text(
+                      '界面布局',
+                      style: TextStyle(color: kWhite, fontSize: 13),
+                    ),
+                    const SizedBox(height: 8),
+                    LayoutChoice(
+                      value: _selectedLayout,
+                      onChanged: _changeLayout,
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('心声选项',
+                            style: TextStyle(color: kWhite, fontSize: 13)),
+                        Switch(
+                          value: _showQuickOptions,
+                          onChanged: (value) {
+                            setState(() => _showQuickOptions = value);
+                            widget.onQuickOptionsChanged(value);
+                          },
+                          activeTrackColor: kWhite,
+                          activeThumbColor: kBlack,
+                          inactiveTrackColor: const Color(0x66FFFFFF),
+                          inactiveThumbColor: kWhite,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    const Text('人设 Prompt',
+                        style: TextStyle(color: kWhite, fontSize: 13)),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: () => setState(() => _warned = true),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(
+                            color: _warned ? const Color(0xFFFF2D2D) : kWhite),
+                        foregroundColor:
+                            _warned ? const Color(0xFFFF2D2D) : kWhite,
+                        shape: const RoundedRectangleBorder(),
+                        alignment: Alignment.center,
+                        minimumSize: const Size.fromHeight(160),
+                        padding: const EdgeInsets.symmetric(horizontal: 18),
+                      ),
+                      child: Text(
+                        '不准偷窥魔女的秘密',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: _warned ? 20 : 16,
+                          height: 1.2,
+                          fontWeight: _warned ? FontWeight.w700 : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            const Text('人设 Prompt',
-                style: TextStyle(color: kWhite, fontSize: 13)),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: () => setState(() => _warned = true),
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(
-                    color: _warned ? const Color(0xFFFF2D2D) : kWhite),
-                foregroundColor: _warned ? const Color(0xFFFF2D2D) : kWhite,
-                shape: const RoundedRectangleBorder(),
-                alignment: Alignment.center,
-                minimumSize: const Size.fromHeight(160),
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-              ),
-              child: Text(
-                '不准偷窥魔女的秘密',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: _warned ? 20 : 16,
-                  height: 1.2,
-                  fontWeight: _warned ? FontWeight.w700 : FontWeight.w400,
-                ),
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [

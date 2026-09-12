@@ -10,12 +10,16 @@ class MemoryPanel extends StatelessWidget {
     this.title = '图书馆记忆',
     this.description = '艾蕾塔只记录足够重要的喜好、压力、热爱与困扰。',
     this.emptyText = '书页还是空的。',
+    this.header,
   });
 
   final List<LibraryMemoryItem> memories;
   final String title;
   final String description;
   final String emptyText;
+
+  /// 列表上方的额外区块（例如「还悬着的事」）。
+  final Widget? header;
 
   @override
   Widget build(BuildContext context) {
@@ -51,21 +55,34 @@ class MemoryPanel extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             Expanded(
-              child: memories.isEmpty
+              child: memories.isEmpty && header == null
                   ? Center(
                       child: Text(
                         emptyText,
                         style: const TextStyle(color: Color(0x99FFFFFF)),
                       ),
                     )
-                  : ListView.separated(
-                      itemCount: memories.length,
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final memory = memories[memories.length - 1 - index];
-                        return MemoryCard(memory: memory);
-                      },
+                  : ListView(
+                      children: [
+                        if (header != null) header!,
+                        if (memories.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 24),
+                            child: Center(
+                              child: Text(
+                                emptyText,
+                                style: const TextStyle(color: Color(0x99FFFFFF)),
+                              ),
+                            ),
+                          )
+                        else
+                          for (var index = memories.length - 1;
+                              index >= 0;
+                              index--) ...[
+                            MemoryCard(memory: memories[index]),
+                            if (index > 0) const SizedBox(height: 12),
+                          ],
+                      ],
                     ),
             ),
           ],

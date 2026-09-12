@@ -11,6 +11,7 @@ class ChatApiClient {
     required String apiKey,
     required String apiUrl,
     required void Function(String reply) onReply,
+    void Function(String reason)? onFinishReason,
   }) async {
     throw UnsupportedError('当前平台暂不支持网络请求。');
   }

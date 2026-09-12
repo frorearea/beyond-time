@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:html' as html;
 
+import 'sse_parser.dart';
+
 class ChatApiException implements Exception {
   ChatApiException(this.statusCode, this.responseText);
 
@@ -15,6 +17,7 @@ class ChatApiClient {
     required String apiKey,
     required String apiUrl,
     required void Function(String reply) onReply,
+    void Function(String reason)? onFinishReason,
   }) async {
     final host = (html.window.location.hostname ?? '').toLowerCase();
     final useLocalProxy = host == 'localhost' ||
@@ -33,20 +36,28 @@ class ChatApiClient {
 
     final completer = Completer<String>();
     final request = html.HttpRequest();
+    final sse = SseAccumulator();
     var responseCursor = 0;
-    var eventBuffer = '';
     var reply = '';
+    var reasonReported = false;
+
+    void reportReason() {
+      if (reasonReported) return;
+      final reason = sse.finishReason;
+      if (reason == null) return;
+      reasonReported = true;
+      onFinishReason?.call(reason);
+    }
 
     void processChunk(String chunk) {
-      eventBuffer += chunk;
-      final events = eventBuffer.split('\n\n');
-      eventBuffer = events.removeLast();
-      for (final event in events) {
-        final delta = _sseDelta(event);
-        if (delta.isEmpty) continue;
-        reply += delta;
-        onReply(reply);
+      final delta = sse.add(chunk);
+      if (delta.isEmpty) {
+        reportReason();
+        return;
       }
+      reply += delta;
+      onReply(reply);
+      reportReason();
     }
 
     request.onProgress.listen((_) {
@@ -68,13 +79,12 @@ class ChatApiClient {
         processChunk(text.substring(responseCursor));
         responseCursor = text.length;
       }
-      if (eventBuffer.trim().isNotEmpty) {
-        final delta = _sseDelta(eventBuffer);
-        if (delta.isNotEmpty) {
-          reply += delta;
-          onReply(reply);
-        }
+      final rest = sse.flush();
+      if (rest.isNotEmpty) {
+        reply += rest;
+        onReply(reply);
       }
+      reportReason();
       completer.complete(reply.isEmpty ? '模型没有返回内容。' : reply);
     });
 
@@ -94,29 +104,4 @@ class ChatApiClient {
 
     return completer.future;
   }
-}
-
-String _sseDelta(String event) {
-  final lines = event.split('\n');
-  final dataLines = lines
-      .where((line) => line.startsWith('data:'))
-      .map((line) => line.substring(5).trim())
-      .where((line) => line.isNotEmpty && line != '[DONE]');
-  final buffer = StringBuffer();
-  for (final line in dataLines) {
-    try {
-      final decoded = jsonDecode(line) as Map<String, dynamic>;
-      final choices = decoded['choices'];
-      if (choices is! List || choices.isEmpty) continue;
-      final choice = choices.first;
-      if (choice is! Map<String, dynamic>) continue;
-      final delta = choice['delta'];
-      if (delta is! Map<String, dynamic>) continue;
-      final content = delta['content'];
-      if (content is String) buffer.write(content);
-    } catch (_) {
-      continue;
-    }
-  }
-  return buffer.toString();
 }

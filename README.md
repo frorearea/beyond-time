@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 # 时间之外 · Beyond Time
 
@@ -29,16 +29,17 @@
 
 | 能力 | 说明 |
 |---|---|
-| 🖤 流式对话 | DeepSeek 流式回复 + 打字机效果 |
+| 🖤 流式对话 | DeepSeek 流式回复 + 打字机效果，被截断时自动续写 |
 | 🃏 塔罗占卜 | 记忆积累后解锁，三张牌结合你们的记忆解读 |
 | 📖 图书馆记忆 | 自动提炼你的喜好/压力/热爱/困扰，像她真的记住了你 |
-| 🔖 书签收藏 | 选中她的句子，收进你的图书馆 |
+| 🔖 书架 | 选中她的句子，收进你自己的书架（与「记忆」分栏） |
+| 🕯 未决之事 | 她记下你提过、还没下文的事；下次推门时会问起 |
 | 🌙 idle 微状态 | 你安静下来时，她会轻声说一句话（只触发一次） |
 | 💌 回归情感弧 | 离开久了再回来，她会用不同的方式迎接你 |
 | 🎭 用户画像 | 她慢慢了解你的话题、心绪与称呼，亲近度自然增长 |
 | 🌧 环境音景 | 雨声 / 炉火 / 风声，可循环切换 |
-| 🎴 双布局 | 舞台（classic）/ 书卷（storybook）两种界面 |
-| 💾 存档导入导出 | 对话、记忆、心声进度一键备份 |
+| 🎴 双布局 | 舞台（经典）/ 书卷（绘卷）两种界面 |
+| 💾 存档导入导出 | 对话、记忆、未决之事、心声进度一键备份 |
 
 ## 🚀 快速开始
 
@@ -98,10 +99,30 @@ assets/prompts/ereta_persona.txt
 | 层 | 选型 |
 |---|---|
 | 前端 | Flutter Web，零第三方依赖 |
+| 架构 | `LibrarySession` 会话状态机 + 纯视图页面 |
 | 平台 API | `dart:html`（XHR / localStorage / AudioElement） |
 | 代理 | 零依赖 Node.js 服务器 |
 | 桌面打包 | `@yao-pkg/pkg` SEA + `resedit` 图标 |
 | 部署 | 静态托管 / Cloudflare Workers（`sites/worker.js`） |
+
+## 🧪 测试与体检
+
+```bash
+# 会话与页面测试（27 项：消息种类隔离、书架、未决之事、回归弧、存档清洗）
+flutter test
+
+# 纯逻辑测试（不需要 Flutter 引擎，零依赖直接 dart run）
+dart run tool/library_logic_test.dart
+dart run tool/reply_completer_test.dart
+dart run tool/profile_test.dart
+
+# 用真实对话日志体检（改动人设后看指标有没有真的变好）
+node tool/archive_report.mjs <导出的存档.json>
+node tool/archive_report.mjs <导出的存档.json> --full
+```
+
+`tool/archive_report.mjs` 会报告存档洁净度、截断率、称呼一致性、附和度、
+记忆结构等信息——把「感觉变好了」变成「数字变好了」。基线数据见 PROJECT.md。
 
 ## 📁 项目文档
 

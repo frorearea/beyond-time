@@ -13,3 +13,7 @@ node_modules/
 *.iml
 *.tgz
 .preview.*.log
+
+# 图书馆存档导出：里面是真实的私人对话，本仓库是公开的（GitHub Pages），
+# 不要提交。需要在本地跑 tool/archive_report.mjs 时自己放一份在根目录即可。
+beyond-time-library-*.json

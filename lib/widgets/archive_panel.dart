@@ -7,6 +7,7 @@ class ArchivePanel extends StatelessWidget {
     super.key,
     required this.messageCount,
     required this.memoryCount,
+    required this.threadCount,
     required this.onExport,
     required this.onImport,
     required this.onClearAll,
@@ -14,6 +15,7 @@ class ArchivePanel extends StatelessWidget {
 
   final int messageCount;
   final int memoryCount;
+  final int threadCount;
   final VoidCallback onExport;
   final VoidCallback onImport;
   final VoidCallback onClearAll;
@@ -54,6 +56,8 @@ class ArchivePanel extends StatelessWidget {
             _ArchiveStat(label: '对话记录', value: '$messageCount 条'),
             const SizedBox(height: 10),
             _ArchiveStat(label: '图书馆记忆', value: '$memoryCount 条'),
+            const SizedBox(height: 10),
+            _ArchiveStat(label: '还悬着的事', value: '$threadCount 件'),
             const SizedBox(height: 26),
             _ArchiveAction(
               title: '导出图书馆存档',

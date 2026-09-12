@@ -21,9 +21,16 @@ class MessageView extends StatelessWidget {
   Widget build(BuildContext context) {
     final isPlayer = message.role == 'user';
     final content = _displayContent(message.content);
+    // 报错与回执不是艾蕾塔说的话：压暗、缩小，避免被误读成她的立场。
+    final isSystemLine = message.kind == MessageKind.notice ||
+        message.kind == MessageKind.error;
     final style = TextStyle(
-      color: kWhite,
-      fontSize: compact ? (isPlayer ? 15 : 16) : (isPlayer ? 18 : 19),
+      color: isSystemLine
+          ? (message.kind == MessageKind.error
+              ? const Color(0xAAFFFFFF)
+              : const Color(0xCCFFFFFF))
+          : kWhite,
+      fontSize: isSystemLine ? 13 : (compact ? (isPlayer ? 15 : 16) : (isPlayer ? 18 : 19)),
       height: isPlayer ? 1.5 : 1.48,
       fontFamily: isPlayer ? 'SimHei' : 'LXGWWenKai',
       fontFamilyFallback: isPlayer

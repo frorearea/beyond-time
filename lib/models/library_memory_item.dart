@@ -13,6 +13,14 @@ class LibraryMemoryItem {
   final String source;
   final String createdAt;
 
+  /// 手动收藏的句子。书签有自己的书架（见 [ShelfPanel]），不算"关于来访者的事实"。
+  bool get isBookmark => source == '手动书签' || category == '书签';
+
+  /// "关于来访者的事实"：喜好、压力、热爱、困扰、自我理解……
+  bool get isKnowledge => !isBookmark;
+
+  DateTime? get createdAtTime => DateTime.tryParse(createdAt);
+
   Map<String, String> toJson() => {
         'category': _worldText(category),
         'content': _worldText(content),

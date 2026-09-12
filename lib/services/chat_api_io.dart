@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'sse_parser.dart';
+
 class ChatApiException implements Exception {
   ChatApiException(this.statusCode, this.responseText);
 
@@ -14,10 +16,21 @@ class ChatApiClient {
     required String apiKey,
     required String apiUrl,
     required void Function(String reply) onReply,
+    void Function(String reason)? onFinishReason,
   }) async {
     final client = HttpClient();
-    var eventBuffer = '';
+    final sse = SseAccumulator();
     var reply = '';
+    var reasonReported = false;
+
+    void reportReason() {
+      if (reasonReported) return;
+      final reason = sse.finishReason;
+      if (reason == null) return;
+      reasonReported = true;
+      onFinishReason?.call(reason);
+    }
+
     try {
       final request = await client.postUrl(Uri.parse(apiUrl));
       request.headers.contentType = ContentType.json;
@@ -32,53 +45,24 @@ class ChatApiClient {
       }
 
       await for (final chunk in response.transform(utf8.decoder)) {
-        eventBuffer += chunk;
-        final events = eventBuffer.split('\n\n');
-        eventBuffer = events.removeLast();
-        for (final event in events) {
-          final delta = _sseDelta(event);
-          if (delta.isEmpty) continue;
-          reply += delta;
-          onReply(reply);
-        }
-      }
-
-      if (eventBuffer.trim().isNotEmpty) {
-        final delta = _sseDelta(eventBuffer);
+        final delta = sse.add(chunk);
         if (delta.isNotEmpty) {
           reply += delta;
           onReply(reply);
         }
+        reportReason();
       }
+
+      final rest = sse.flush();
+      if (rest.isNotEmpty) {
+        reply += rest;
+        onReply(reply);
+      }
+      reportReason();
 
       return reply.isEmpty ? '模型没有返回内容。' : reply;
     } finally {
       client.close(force: true);
     }
   }
-}
-
-String _sseDelta(String event) {
-  final lines = event.split('\n');
-  final dataLines = lines
-      .where((line) => line.startsWith('data:'))
-      .map((line) => line.substring(5).trim())
-      .where((line) => line.isNotEmpty && line != '[DONE]');
-  final buffer = StringBuffer();
-  for (final line in dataLines) {
-    try {
-      final decoded = jsonDecode(line) as Map<String, dynamic>;
-      final choices = decoded['choices'];
-      if (choices is! List || choices.isEmpty) continue;
-      final choice = choices.first;
-      if (choice is! Map<String, dynamic>) continue;
-      final delta = choice['delta'];
-      if (delta is! Map<String, dynamic>) continue;
-      final content = delta['content'];
-      if (content is String) buffer.write(content);
-    } catch (_) {
-      continue;
-    }
-  }
-  return buffer.toString();
 }

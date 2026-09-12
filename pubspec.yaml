@@ -10,7 +10,11 @@ dependencies:
   flutter:
     sdk: flutter
 
-dev_dependencies: {}
+dev_dependencies:
+  # SDK 自带，不引入任何第三方依赖（flutter_test 随 Flutter SDK 分发）。
+  # 用于 test/ 下的会话与页面冒烟测试。
+  flutter_test:
+    sdk: flutter
 
 flutter:
   uses-material-design: true
