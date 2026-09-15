@@ -231,7 +231,8 @@ node tool/archive_report.mjs <存档.json> --full   # 附带对话全文摘要
 - **新增消息类型必须用 `MessageKind`，不要再用字符串嗅探**。历史上靠匹配「书签」+「图书馆」来剔除回执，任何含这些词的真话都会被静默吞掉
 - **单位/上限这类数字只写一处**：记忆 45 字、依据 60 字、记忆上限 32 条、未决之事上限 12 条，都定义在 `lib/config.dart` 或对应 model 里
 - 纯逻辑优先放在不 import flutter 的支线文件里（`thread_book` / `memory_book` / `return_arc` / `reply_completer`），这样 `dart run` 就能测
-- 需要 widget / ChangeNotifier 的测试放 `test/`，用 `flutter test`；**注入 `InMemoryStore`，不要碰真实数据目录**
+- 需要 widget / ChangeNotifier 的测试放 `test/`，用 `flutter test`；**一律通过 `BeyondTimePage(session: ...)` 注入 `InMemoryStore` 驱动的会话**，绝不让它回落到平台存储（否则会读写你本机真实的 BeyondTime 数据）
+- 写回归测试时先确认它能**在修复前失败**。反例：测"发送后清空输入框"如果没配 API Key，旧代码会走 missingApiKey 分支顺手清空，测试就完全测不出这个 bug
 - 大字文件（>800 行）优先拆分到 `lib/widgets/` 或 `lib/services/`
 - 人设文件 `assets/prompts/ereta_persona.txt` 有备份版本，修改前先备份
 - 测试：`tool/*_test.dart`（零依赖 `dart run`）+ `test/*_test.dart`（`flutter test`），新逻辑照此补充
@@ -267,3 +268,5 @@ node tool/archive_report.mjs <存档.json> --full   # 附带对话全文摘要
 11. 旧存档（v1）导入时会做一次精确匹配清洗：丢弃已知的 idle/离馆/回归台词、书签回执、API Key 提示，并折叠相邻完全相同的台词。只做精确匹配，不做模糊判断，以免误删她真的说过的话
 12. 侧栏面板（设置/记忆/书架/存档）宽度固定 460/440；设置面板已改为「页眉固定 + 中段可滚动 + 底部按钮固定」，在 1280x600 这类矮窗口不会再溢出（有回归测试兜底）
 13. `pubspec.yaml` 的 `dev_dependencies` 里有 `flutter_test`（SDK 自带，不是第三方依赖），README 的 "zero-dep" 徽章依然成立
+14. 发送后**必须在 `await` 之前清空输入框**。重构时曾漏掉这一步，导致"发出去的话留在文本框里"（只有未填 API Key 的分支才清）。两条回归测试覆盖了发送按钮与回车两条路径
+15. 页面支持 `BeyondTimePage(session: ...)` 注入会话，仅供测试。注入的会话由调用方负责销毁，且要**先卸载页面再 dispose**（顺序反了会在 `removeListener` 上抛断言）

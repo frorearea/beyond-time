@@ -25,7 +25,14 @@ import '../widgets/thread_section.dart';
 /// （对话、记忆、未决之事、画像、回归弧、环境语）与持久化都在
 /// [LibrarySession] 里。页面不再直接写存储、不再自己拼 API 请求。
 class BeyondTimePage extends StatefulWidget {
-  const BeyondTimePage({super.key});
+  const BeyondTimePage({super.key, this.session});
+
+  /// 测试注入用。为空时使用平台存储创建会话。
+  ///
+  /// 这个口子必须存在：否则 widget 测试只能去读写本机真实的
+  /// `%APPDATA%\BeyondTime`（会话构造函数就会写用户画像），
+  /// 一跑测试就污染真实数据。
+  final LibrarySession? session;
 
   @override
   State<BeyondTimePage> createState() => _BeyondTimePageState();
@@ -42,13 +49,17 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
 
   late final LibrarySession _session;
 
+  /// 会话是页面自己建的才由页面销毁；注入进来的由调用方负责。
+  late final bool _ownsSession;
+
   int _lastMessageCount = 0;
   int _lastTailLength = 0;
 
   @override
   void initState() {
     super.initState();
-    _session = LibrarySession();
+    _ownsSession = widget.session == null;
+    _session = widget.session ?? LibrarySession();
     _session.addListener(_onSessionChanged);
     _syncSettingsControllers();
     unawaited(_session.start());
@@ -58,7 +69,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
   @override
   void dispose() {
     _session.removeListener(_onSessionChanged);
-    _session.dispose();
+    if (_ownsSession) _session.dispose();
     _inputController.dispose();
     _apiKeyController.dispose();
     _apiUrlController.dispose();
@@ -317,9 +328,13 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
 
   Future<void> _sendCurrentText() async {
     final text = _inputController.text.trim();
+    if (text.isEmpty) return;
+    // 立刻清空输入框：发出的话不该留在框里等着被重发。
+    // 这一步必须在 await 之前——等模型回复再清，用户会盯着自己已经发出去的话
+    // 留在原地，而失败分支还会把它留在那儿。
+    _inputController.clear();
     final outcome = await _session.send(text);
     if (outcome.status == SendStatus.missingApiKey) {
-      _inputController.clear();
       _openSettings();
     }
   }

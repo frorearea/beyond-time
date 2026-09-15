@@ -166,6 +166,7 @@ class LibrarySession extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (_disposed) return;
     _disposed = true;
     _idleTimer?.cancel();
     super.dispose();
