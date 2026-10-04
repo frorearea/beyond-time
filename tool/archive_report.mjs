@@ -98,21 +98,90 @@ console.log(`用「你」：${pct(real.filter((m) => /你/.test(m.content)).leng
 const mixed = real.filter((m) => /您/.test(m.content) && /你/.test(m.content));
 console.log(`同一条里混用：${mixed.length} 条`);
 
-line('4. 附和度（反谄媚指标）');
+// 这一节**只做诊断，不设目标**。
+//
+// 曾经有一版给"含转折 / 保留意见"定了 ≥25% 的目标，并在 prompt 里要求"每轮至少
+// 留一处异议"。结果 2026-10-04 的存档显示：转折率升上去了，但来访者的评价是
+// "为了反驳而反驳"——回复开始整齐地走「先肯定 → 不过我得挑一句 → 转折 → 反问」，
+// 「不过我得说句不客气的 / 提个醒 / 挑一句 / 泼一点凉水」反复出现。
+//
+// 教训：**给性格特征设指标，模型就会生产那个特征的形状。** 所以这里量的是
+// "机械感"本身（句式是否在重复），而不是"她发表了几次异议"。异议多不多不重要，
+// 重要的是每一条都该是她自己的判断。
+line('4. 说话方式（诊断用，不设目标）');
 const AFFIRM =
   /^(正是如此|确实如此|说得|这句话|你说得|没错|是的|对。|你倒|你知道|因为|我懂|我理解|我猜|你读得|你问得|问得好|这个设定|这个念头|这个安排|这|对)/;
-console.log(
-  `以附和 / 承接词开头：${pct(real.filter((m) => AFFIRM.test(m.content.trim())).length, real.length)}`,
-);
-console.log(`以「这句话」开头：${real.filter((m) => /^这句话/.test(m.content.trim())).length}`);
-console.log(`含「值得被」：${real.filter((m) => /值得被/.test(m.content)).length}`);
 const DISAGREE = /(不过|但是|可是|我倒|我并不|未必|不见得|别急着|我不这么|这不对|我不同意)/;
+const endsQuestion = (m) => /[？?]\s*$/.test(m.content.trim());
+const startsWithAffirm = (m) => AFFIRM.test(m.content.trim());
+const hasTurn = (m) => DISAGREE.test(m.content);
+const hasDissent = (m) => hasTurn(m);
+
+console.log(`以附和 / 承接词开头：${pct(real.filter(startsWithAffirm).length, real.length)}`);
+console.log(`含转折词：${pct(real.filter(hasTurn).length, real.length)}`);
+console.log(`含「值得被」：${real.filter((m) => /值得被/.test(m.content)).length}`);
 console.log(
-  `含转折 / 保留意见：${pct(real.filter((m) => DISAGREE.test(m.content)).length, real.length)}　（目标 ≥25%）`,
+  `以问号收尾：${pct(real.filter(endsQuestion).length, real.length)}`,
+);
+console.log('  ↑ 以上全部只是诊断读数。不要把它们当目标去调 prompt。');
+
+// 真正的"机械感"：三件套句式（先肯定 → 转折 → 反问）占了多少。
+const template = real.filter(
+  (m) => startsWithAffirm(m) && hasTurn(m) && endsQuestion(m),
 );
 console.log(
-  `以问号收尾：${pct(real.filter((m) => /[？?]\s*$/.test(m.content.trim())).length, real.length)}`,
+  `\n「先肯定 → 转折 → 反问」三件套：${pct(template.length, real.length)}　${
+    template.length === 0 ? '✅' : '⚠️ 这是最像自动售货机的句式，越低越好'
+  }`,
 );
+
+// 开头句式重复：把每条回复的第一个小句当"开场模板"，看有没有撞车。
+const firstClause = (text) => {
+  const head = text.trim().split(/[。！？，、；\n]/)[0] ?? '';
+  return head.slice(0, 10);
+};
+const openingCounts = new Map();
+for (const m of real) {
+  const key = firstClause(m.content);
+  if (key.length < 3) continue;
+  openingCounts.set(key, (openingCounts.get(key) ?? 0) + 1);
+}
+const repeatedOpenings = [...openingCounts.entries()]
+  .filter(([, n]) => n >= 3)
+  .sort((a, b) => b[1] - a[1]);
+console.log(`\n重复的开场句式（≥3 次）：${repeatedOpenings.length} 种`);
+for (const [text, n] of repeatedOpenings.slice(0, 8)) {
+  console.log(`  x${n} ${text}…`);
+}
+
+// 口癖：在 ≥4 条不同回复里出现过的 5 字短语。
+const phraseReplies = new Map();
+for (const m of real) {
+  const flat = m.content.replace(/\s+/g, '');
+  const seen = new Set();
+  for (let i = 0; i + 5 <= flat.length; i++) {
+    const gram = flat.slice(i, i + 5);
+    if (seen.has(gram)) continue;
+    seen.add(gram);
+    phraseReplies.set(gram, (phraseReplies.get(gram) ?? 0) + 1);
+  }
+}
+const memoryText = (j.libraryMemory ?? [])
+  .map((m) => `${m.content ?? ''}${m.evidence ?? ''}`)
+  .join('')
+  .replace(/\s+/g, '');
+const tics = [...phraseReplies.entries()]
+  .filter(([, n]) => n >= 4)
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 12);
+console.log(`\n口癖候选（在 ≥4 条回复里出现过的 5 字短语）：${tics.length} 条`);
+for (const [phrase, n] of tics) {
+  // 区分两种成因：一种是她自己的文风口癖，另一种是同一段记忆被反复取用。
+  const echo = memoryText.includes(phrase) ? '　← 记忆回声（同一段记忆被反复取用）' : '';
+  console.log(`  x${n} ${phrase}${echo}`);
+}
+if (tics.length === 0) console.log('  ✅ 没有明显的口头禅');
+console.log(`\n（异议条数 ${real.filter(hasDissent).length} 条仅作记录；异议该由判断决定，不该由指标决定）`);
 
 line('5. 记忆与未决之事');
 const mem = j.libraryMemory ?? [];

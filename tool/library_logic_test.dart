@@ -649,11 +649,23 @@ void main() {
   check('创作稿提示写明那是他的东西，不是她的',
       context.any((m) =>
           m['content']!.contains('红羽离笼记') && m['content']!.contains('不是你的')));
-  check('反谄媚纪律被注入',
-      context.any((m) => m['content'] == ConversationContext.antiFlatteryInstruction));
-  check('反谄媚纪律点出了体检工具在量的两个特征',
-      ConversationContext.antiFlatteryInstruction.contains('不要用') &&
-          ConversationContext.antiFlatteryInstruction.contains('保留'));
+  check('性格说话方式被注入',
+      context.any(
+          (m) => m['content'] == ConversationContext.characterVoiceInstruction));
+  check('说话指令写明"看得准比唱反调重要"',
+      ConversationContext.characterVoiceInstruction.contains('看得准'));
+  check('说话指令禁止为显得独立而硬造异议',
+      ConversationContext.characterVoiceInstruction.contains('硬造异议'));
+
+  // 回归防护（2026-10-04 的教训）：不要再给人格设"每轮至少一处异议"这种配额，
+  // 也不要在指令里点名具体的转折词。这两件事会立刻变成口癖——存档里出现了
+  // 「不过我得说句不客气的 / 提个醒 / 挑一句 / 泼一点凉水」四种近乎相同的说法。
+  check('说话指令不含"每轮至少"这类异议配额',
+      !ConversationContext.characterVoiceInstruction.contains('每轮至少'));
+  check('说话指令不点名具体转折词',
+      !ConversationContext.characterVoiceInstruction.contains('我倒觉得') &&
+          !ConversationContext.characterVoiceInstruction.contains('未必') &&
+          !ConversationContext.characterVoiceInstruction.contains('不见得'));
 
   // 记忆注入必须分栏：书签以"收藏"的身份出现，而不是被当成对来访者的描述。
   final splitContext = const ConversationContext().buildMessages(

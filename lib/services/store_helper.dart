@@ -4,6 +4,7 @@ import '../config.dart';
 import '../models/api_settings.dart';
 import '../models/chat_message.dart';
 import '../models/creation_note.dart';
+import '../models/library_archive.dart';
 import '../models/library_memory_item.dart';
 import '../models/open_thread.dart';
 import '../models/user_profile.dart';
@@ -95,17 +96,28 @@ class StoreHelper {
     _store.write(kQuickCountKey, index.toString());
   }
 
+  /// 读取对话历史。
+  ///
+  /// **必须清洗**：这里曾经只过滤 `isChat`，于是老版本写进 localStorage 的
+  /// 环境语与回执会赖着不走——那些条目没有 `kind`，[ChatMessage.fromJson]
+  /// 会把它默认成 `chat`，种类过滤拦不住；而保存时它们已经是 chat，于是又被
+  /// 原样写回，形成一个永远出不去的循环（2026-10-04 的存档里还有 46 条，
+  /// 持续挤占 80 轮上下文窗口，把她的称呼从「您」带成了「你」93%）。
+  ///
+  /// 清洗逻辑只有一份，在 [LibraryArchive.sanitizeMessages]：导入路径用它，
+  /// 加载路径也必须用它，否则"新写的干净、老的永远脏"。
   List<ChatMessage>? loadHistory() {
     final raw = _store.read(kHistoryKey);
     if (raw == null) return null;
     try {
       final data = jsonDecode(raw) as List<dynamic>;
-      final history = data
-          .whereType<Map<String, dynamic>>()
-          .map(ChatMessage.fromJson)
-          .where((message) => message.isChat)
-          .where((message) => message.content.trim().isNotEmpty)
-          .toList();
+      final history = LibraryArchive.sanitizeMessages(
+        data
+            .whereType<Map<String, dynamic>>()
+            .map(ChatMessage.fromJson)
+            .where((message) => message.content.trim().isNotEmpty)
+            .toList(),
+      );
       return history.isNotEmpty ? history : null;
     } catch (_) {
       return null;

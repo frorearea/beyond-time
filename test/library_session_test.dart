@@ -107,6 +107,38 @@ void main() {
   });
 
   group('消息种类隔离（A1/A3 回归防护）', () {
+    test('从 localStorage 加载历史时也会清洗老版本的噪音（粘性污染回归）', () {
+      // 复现真实成因：老版本把环境语/回执写进了 localStorage，那些条目没有
+      // kind，fromJson 会把它默认成 chat，于是种类过滤拦不住、保存时又被原样
+      // 写回，永远出不去。只有加载路径也走 sanitizeMessages 才能断掉这个循环。
+      final s = buildSession(seed: {
+        kHistoryKey: jsonEncode([
+          {'role': 'assistant', 'content': '进来吧。这里暂时只有黑暗。'},
+          {'role': 'assistant', 'content': '灯芯跳了一下。'},
+          {'role': 'assistant', 'content': '天花板上有灰尘在飘。'},
+          {'role': 'assistant', 'content': '收好了。亲爱的，这句话现在属于图书馆了。'},
+          {'role': 'assistant', 'content': '你回来了。书还翻在你上次看的那一页。'},
+          {'role': 'assistant', 'content': '连接没有成功：SocketException'},
+          {'role': 'user', 'content': '我想聊聊最近在玩的游戏'},
+          {'role': 'assistant', 'content': '那就说说看。'},
+        ]),
+      });
+
+      final contents = s.session.conversationHistory.map((m) => m.content);
+      expect(contents, contains('我想聊聊最近在玩的游戏'));
+      expect(contents, contains('那就说说看。'));
+      expect(contents.any((c) => c.contains('灯芯')), isFalse);
+      expect(contents.any((c) => c.contains('天花板')), isFalse);
+      expect(contents.any((c) => c.contains('属于图书馆')), isFalse);
+      expect(contents.any((c) => c.contains('你回来了')), isFalse);
+      expect(contents.any((c) => c.contains('连接没有成功')), isFalse);
+
+      // 而且下一次保存不会再把它们写回去。
+      s.session.clearChat();
+      expect(_historyContents(s.store).any((c) => c.contains('灯芯')), isFalse);
+      s.session.dispose();
+    });
+
     test('未填 API Key 时的提示是 notice，且不写进存档', () async {
       final s = buildSession();
       final outcome = await s.session.send('你好呀，我回来了。');
@@ -360,6 +392,20 @@ void main() {
   });
 
   group('清空与设置', () {
+    test('清空对话后回到开场，作品提示仍在（否则开场提示永远见不到）', () {
+      final s = buildSession();
+      s.session.mergeThreadForTest(const OpenThreadDraft(topic: '一件悬案'));
+
+      s.session.clearChat();
+      final opening = s.session.messages;
+      expect(opening.length, 2, reason: '清空 = 重新推门进来，两句开场白都该在');
+      expect(opening.first.content, contains('进来吧'));
+      expect(opening.last.content, contains('游戏'));
+      // 清空对话不该动记忆与牵挂。
+      expect(s.session.openThreads.length, 1);
+      s.session.dispose();
+    });
+
     test('清空图书馆同时清掉记忆与未决之事', () {
       final s = buildSession();
       s.session.addBookmark('一句话');
