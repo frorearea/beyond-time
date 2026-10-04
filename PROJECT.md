@@ -218,7 +218,7 @@ node tool/scrub_archive.mjs <存档.json> --out clean.json
 - 来访者的创作稿注入时会明确声明"这是他的东西，不是你的"，并禁止她替他改写或补全
 - 心声选项可折叠，默认关闭（`showQuickOptions` 默认 false）
 - 开场是**两句话**：第一句是氛围，第二句她把手边的游戏与动画碟递出来。第二句刻意不提书（谈书是她最容易编造书名的领域，等作品真值清单落地后再补）
-- **`clearChat()` 与 `resetEverything()` 都回到 `_openingMessages`**，而不是各自一句"重新开始"的台词。原因：开场第二句是给"不知道从哪儿开口"的人递梯子的，而清空之后的人正好又回到那个位置；原来那种写法下，**开场提示只对"浏览器里从来没有过历史"的人生效**，任何人聊过一次就再也见不到它了——等于白加。清空对话不影响记忆与牵挂（那是 `resetEverything` 的事）
+- **`clearChat()` / `resetEverything()` 各自保留自己那句台词，不回到 `_openingMessages`**。曾经改成"清空 = 重新推门进来"，被否掉了：那样会让"重新开始"和"第一次进来"变成同一件事。代价是**开场提示只服务于真正的首次进入**（详见第六节第 23 条）
 
 ### 部署（GitHub Pages）
 
@@ -369,6 +369,8 @@ node tool/scrub_archive.mjs <存档.json> --out clean.json
 20. **`sanitizeMessages` 必须在两条路径上都跑**：导入（`LibraryArchive.tryParse`）与加载（`StoreHelper.loadHistory`）。曾经只在导入路径上跑，于是老版本写进 localStorage 的噪音永远赖着不走（缺 `kind` → 默认成 chat → 种类过滤拦不住 → 保存时又是 chat → 死循环）。**新写代码时记住：任何"读历史"的新入口都要过一遍清洗**。测试在 `test/library_session_test.dart` 的「粘性污染回归」一例
 21. `return_lines.dart` / `idle_lines.dart` 里的环境台词**统一用「你」，而人设统一用「您」**（「你」28 次、「您」0 次）。这些台词本来不进上下文（是 `ambient`），所以以前没暴露；但一旦有噪音漏进历史，它们就会把称呼带跑偏。如果以后决定统一口径，改这里的时候两处要一起改
 22. **人设文件不要用规则清单写性格**。`ereta_persona.txt` 里正面气质是用她自己的口吻写的（"她最受不了自己变成……的人"），而不是"每次回复必须……"。2026-10-04 的教训见第五节末：规则清单会被模型当成每轮要满足的 checklist
+23. **开场第二句只有"真正首次进入"才看得到**：`_messages = loadHistory() ?? _openingMessages`，所以只要 localStorage 里有历史就用不到它。试过让 `clearChat` 也回到开场，被否掉了（见第四节"运行时行为"）。**要改这个行为之前先想清楚**：三个候选方案各有代价——(a) 清空回到开场（=把"重新开始"和"首次进来"混为一谈，已否）；(b) 把它做成一条 idle/环境语（但环境语同时至多一条，且不写存档）；(c) 不做，接受它只对新访客生效。目前是 (c)
+24. **回归弧在"有历史"时的行为直到 2026-10-04 才被测试覆盖**。此前 `test/library_session_test.dart` 的回归弧用例都只 seed `lastVisit` / `openThreads`、**不 seed 历史**，于是 `_messages` 落到 `_openingMessages`——"已经有对话记录时问候还进不进得来"这条路是空的。补过之后确认：有历史时三天档、四小时档都照常插入 `ambient` 问候，一小时档不问候。**怀疑回归弧出问题时，先看那两条新用例**，再用 `tool/archive_report.mjs` 确认存档里的环境语是不是被当成噪音清掉了（那是正常的：环境语本来就不该进历史）
 
 ---
 

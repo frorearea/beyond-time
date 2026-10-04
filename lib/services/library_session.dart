@@ -545,15 +545,19 @@ class LibrarySession extends ChangeNotifier {
     return ImportStatus.ok;
   }
 
-  /// 清空对话，回到"重新推门进来"的状态。
+  /// 清空对话。
   ///
-  /// 这里原本是一句单独的「房间重新安静下来了……」。改成回到 [_openingMessages]，
-  /// 是因为两句开场白里的第二句是**给不知道从哪儿开口的人**递梯子的；
-  /// 而清空之后的人正好又回到了那个位置。原来那种写法下，开场提示只对
-  /// "浏览器里从来没有过历史"的人生效——任何人聊过一次之后就再也见不到了，
-  /// 等于白加。
+  /// 刻意**不**回到 [_openingMessages]：试过一次，被否掉了。开场第二句是给
+  /// "不知道从哪儿开口"的人递梯子的，看起来放在清空之后很自然；但这样会让
+  /// "重新开始"和"第一次推门进来"变成同一件事，而清空本身还有自己那句
+  /// 「房间重新安静下来了」的语气。开场提示仍然只服务于真正的首次进入。
   void clearChat() {
-    _messages = _openingMessages;
+    _messages = const [
+      ChatMessage(
+        role: 'assistant',
+        content: '房间重新安静下来了。您可以从任何一个句子重新开始，亲爱的。',
+      ),
+    ];
     _storeHelper.deleteHistory();
     _storeHelper.saveLastVisit(nowProvider().toIso8601String());
     _idleDone = false;
@@ -561,9 +565,11 @@ class LibrarySession extends ChangeNotifier {
     _notify();
   }
 
-  /// 清空一切（对话、记忆、未决之事、创作稿），回到第一次推门的状态。
+  /// 清空一切（对话、记忆、未决之事、创作稿）。
   void resetEverything() {
-    _messages = _openingMessages;
+    _messages = const [
+      ChatMessage(role: 'assistant', content: '书页重新变白了。亲爱的，我们可以从这里重新开始。'),
+    ];
     _memories = const [];
     _threads = const [];
     _creations = const [];

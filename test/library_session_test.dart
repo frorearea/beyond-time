@@ -104,6 +104,49 @@ void main() {
       expect(s.session.messages.last.content, isNot(contains('{topic}')));
       s.session.dispose();
     });
+
+    // 下面两条补的是覆盖缺口：以上用例都只 seed lastVisit / openThreads，
+    // **没有 seed 历史**，于是 `_messages` 落到 `_openingMessages`。
+    // "已经有对话记录时回归问候还进不进得来"这条路一直没人测。
+    test('已经有对话记录时，离开三天仍然会插进回归问候', () {
+      final lastVisit = DateTime.now().subtract(const Duration(days: 3));
+      final s = buildSession(seed: {
+        kLastVisitKey: lastVisit.toIso8601String(),
+        kHistoryKey: jsonEncode([
+          {'role': 'user', 'content': '上次说到的第一句'},
+          {'role': 'assistant', 'content': '上次回答的第二句'},
+        ]),
+        kOpenThreadsKey: jsonEncode([
+          OpenThread(
+            id: 't1',
+            topic: '保研还是去海外',
+            detail: '',
+            status: ThreadStatus.open,
+            createdAt: lastVisit.toIso8601String(),
+            updatedAt: lastVisit.toIso8601String(),
+          ).toJson(),
+        ]),
+      });
+
+      final messages = s.session.messages;
+      expect(messages.length, 3, reason: '两条历史 + 一条环境语问候');
+      expect(messages.last.kind, MessageKind.ambient);
+      expect(messages.last.content, contains('保研还是去海外'));
+      s.session.dispose();
+    });
+
+    test('已经有对话记录时，离开一小时仍然不问候', () {
+      final s = buildSession(seed: {
+        kLastVisitKey:
+            DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
+        kHistoryKey: jsonEncode([
+          {'role': 'user', 'content': '刚才那句'},
+        ]),
+      });
+      expect(s.session.messages.every((m) => m.kind != MessageKind.ambient),
+          isTrue);
+      s.session.dispose();
+    });
   });
 
   group('消息种类隔离（A1/A3 回归防护）', () {
@@ -392,15 +435,14 @@ void main() {
   });
 
   group('清空与设置', () {
-    test('清空对话后回到开场，作品提示仍在（否则开场提示永远见不到）', () {
+    test('清空对话后是她自己那句话，不是把开场白再念一遍', () {
       final s = buildSession();
       s.session.mergeThreadForTest(const OpenThreadDraft(topic: '一件悬案'));
 
       s.session.clearChat();
-      final opening = s.session.messages;
-      expect(opening.length, 2, reason: '清空 = 重新推门进来，两句开场白都该在');
-      expect(opening.first.content, contains('进来吧'));
-      expect(opening.last.content, contains('游戏'));
+      expect(s.session.messages.length, 1,
+          reason: '清空 ≠ 第一次推门进来，不要回到 _openingMessages');
+      expect(s.session.messages.single.content, contains('房间重新安静'));
       // 清空对话不该动记忆与牵挂。
       expect(s.session.openThreads.length, 1);
       s.session.dispose();
