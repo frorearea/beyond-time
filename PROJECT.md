@@ -204,7 +204,9 @@ node tool/scrub_archive.mjs <存档.json> --out clean.json
 
 - API 配置存 localStorage（`beyondTimeFlutterSettings`）；`server.js` 本地代理 `/api/chat`
 - 线上环境（GitHub Pages 等）仅 localhost 走 `/api/chat` 代理，其余直连 API；Cloudflare 域名（`.workers.dev`/`.pages.dev`）也走代理（见 `chat_api_web.dart` 的 hostname 判断）
-- **消息种类**（`MessageKind`）：`chat` 才入存档与上下文；`ambient`（环境语）、`notice`（书签回执、API Key 提示）、`error`（连接失败）只在界面显示，界面压暗以示不是她的话
+- **消息种类**（`MessageKind`）：`chat` 才入存档与上下文；`ambient`（环境语）、`notice`（书签回执、API Key 提示）、`error`（连接失败）只在界面显示
+  - ⚠️ **已知不一致**：文档一直说这三种"界面压暗以示不是她的话"，但 `message_view.dart` 的 `isSystemLine` **只覆盖 `notice` 与 `error`**，`ambient` 是以跟她真话同样的亮度和字号渲染的（`ChatMessage.isAmbient` 那个 getter 现在没有任何调用点，是重构时留下的痕迹）。两种读法都有道理——idle 台词确实是"她在说话"，而 notice/error 是系统回执——**需要你定**：要么让 ambient 也压暗（合文档），要么改文档（承认环境语也算她的话）
+- **回归问候是"一次性"的，不留在历史里**：`_applyReturnGreeting` 把它作为 `ambient` 插入，而 `_persistHistory()` 只写 `chat`，所以刷新之后就看不到了（除非档位仍然成立，比如没发消息）。这是设计如此：环境语本来就不该进历史。**2026-10-04 之前看起来"有记录"，是因为老版本把环境语当 `chat` 存进了 localStorage**，那正是被清洗掉的那 46 条。如果希望"每次回来的问候都留个痕迹"，那是另一个功能，需要单独设计（见第六节第 23 条）
 - 环境语**页面同时至多一条**，且**不写入存档**
 - `max_tokens` 默认 1000（`kDefaultMaxTokens`）。**不能调小**：同时开启 thinking 时思维链会吃掉预算，520 曾导致 101 条回复里有 4 条被切断在句子中间
 - 截断判定用流式响应里的 `finish_reason == 'length'`（权威信号），缺失时才回落到"结尾无标点"启发式；命中后自动续写一次
