@@ -5,13 +5,16 @@ import 'dart:math' as math;
 import '../lib/config.dart';
 import '../lib/data/return_lines.dart';
 import '../lib/models/chat_message.dart';
+import '../lib/models/creation_note.dart';
 import '../lib/models/library_archive.dart';
 import '../lib/models/library_memory_item.dart';
 import '../lib/models/open_thread.dart';
 import '../lib/services/chat_api.dart';
 import '../lib/services/conversation_context.dart';
+import '../lib/services/creation_book.dart';
 import '../lib/services/memory_book.dart';
 import '../lib/services/memory_capture_service.dart';
+import '../lib/services/memory_selector.dart';
 import '../lib/services/return_arc.dart';
 import '../lib/services/thread_book.dart';
 
@@ -119,8 +122,9 @@ void main() {
   final exportedJson = jsonDecode(exported) as Map<String, dynamic>;
   final exportedMessages = (exportedJson['messages'] as List).length;
   check('导出只写真实对话（5 条 → 2 条）', exportedMessages == 2);
-  check('导出带版本号 v2', exportedJson['version'] == 2);
+  check('导出带当前版本号 v3', exportedJson['version'] == 3);
   check('导出包含未决之事字段', exportedJson.containsKey('openThreads'));
+  check('导出包含创作稿字段', exportedJson.containsKey('creations'));
 
   // ------------------------------------------------------------ 未决之事簿记
   section('未决之事簿记');
@@ -270,6 +274,207 @@ void main() {
   check('极端情况下也能维持上限',
       bookmarksCapped.length == kMaxLibraryMemory);
 
+  // ------------------------------------------------------------ 记忆选择器
+  section('记忆选择器（话题相关 + 书签配额）');
+  const selector = MemorySelector();
+
+  LibraryMemoryItem dated(
+    String content,
+    String createdAt, {
+    bool isBookmark = false,
+  }) =>
+      LibraryMemoryItem(
+        category: isBookmark ? '书签' : '喜好',
+        content: content,
+        evidence: isBookmark ? '来访者手动收藏的句子' : content,
+        source: isBookmark ? '手动书签' : '艾蕾塔整理',
+        createdAt: createdAt,
+      );
+
+  // 复现 2026-09-17 的存档形状：书签远多于事实，且书签更新。
+  final crowded = [
+    for (var i = 0; i < 15; i++)
+      dated('她说过的一句漂亮话$i', now.add(Duration(minutes: i)).toIso8601String(),
+          isBookmark: true),
+    for (var i = 0; i < 6; i++)
+      dated('来访者的第$i件事实', now.subtract(Duration(days: i)).toIso8601String()),
+  ];
+  final picked = selector.select(memories: crowded, query: '', now: now);
+  final pickedBookmarks = picked.where((m) => m.isBookmark).length;
+  final pickedFacts = picked.where((m) => m.isKnowledge).length;
+  check('书签被配额拦住（15 → $kMaxInjectedBookmarks）',
+      pickedBookmarks == kMaxInjectedBookmarks);
+  check('事实全部拿到预算（6 条都在）', pickedFacts == 6);
+  check('书签不再吃掉事实的额度',
+      picked.length == 6 + kMaxInjectedBookmarks);
+
+  // 话题相关应当压过"仅仅更新"。
+  final noisy = [
+    for (var i = 0; i < 9; i++)
+      dated('来访者喜欢第$i种无关的东西', now.add(Duration(minutes: i)).toIso8601String()),
+    dated('来访者想做一个雨中的迷宫游戏', '2026-01-01T00:00:00.000'),
+  ];
+  final relevant = selector.select(
+    memories: noisy,
+    query: '我最近在写那个雨里的迷宫，想加点新的东西进去',
+    now: now,
+  );
+  check('最旧但切题的记忆会被挑中',
+      relevant.any((m) => m.content == '来访者想做一个雨中的迷宫游戏'));
+  check('切题时仍然不超过事实上限', relevant.length <= kMaxInjectedFacts);
+
+  // 没有话题信号时退化为"最近优先"（与旧行为一致，不能变得更差）。
+  final recencyOnly = selector.select(memories: noisy, query: '', now: now);
+  check('无话题信号时退化为最近优先',
+      recencyOnly.any((m) => m.content == '来访者喜欢第8种无关的东西'));
+  check('无话题信号时不选最旧的那条',
+      !recencyOnly.any((m) => m.content == '来访者想做一个雨中的迷宫游戏'));
+
+  check('相关度对无关话题为 0',
+      selector.relevance('我最近在写雨里的迷宫', '来访者喜欢咖啡') == 0);
+  check('相关度对同一话题大于 0',
+      selector.relevance('雨里的迷宫', '来访者想做一个雨中的迷宫游戏') > 0);
+
+  final query = selector.buildQuery(const [
+    ChatMessage(role: 'user', content: '第一句'),
+    ChatMessage(role: 'assistant', content: '她的回答'),
+    ChatMessage(role: 'user', content: '第二句'),
+  ]);
+  check('查询串只取访客的话', query.contains('第一句') && !query.contains('她的回答'));
+
+  // ------------------------------------------------------------ 创作稿簿记
+  section('创作稿簿记（来访者自己的东西）');
+  const creationBook = CreationBook();
+
+  final firstCreation = creationBook.merge(const [], const CreationDraft(
+    title: '红羽离笼记',
+    kind: '故事',
+    content: '红发少女把推免函折成一只鸟',
+  ), now: now);
+  check('新稿子被记下', firstCreation.length == 1);
+  check('标题完整保留', firstCreation.first.title == '红羽离笼记');
+  check('类型保留', firstCreation.first.kind == '故事');
+
+  final mergedCreation = creationBook.merge(firstCreation, const CreationDraft(
+    title: '红羽离笼记',
+    content: '补了一句：她在风里散开发绳',
+  ), now: now);
+  check('同一份稿子被合并而不是新开一条', mergedCreation.length == 1);
+  check('合并时保留原 id', mergedCreation.first.id == firstCreation.first.id);
+  check('合并时补充了新内容',
+      mergedCreation.first.content == '补了一句：她在风里散开发绳');
+
+  final shortTitle = creationBook.merge(mergedCreation, const CreationDraft(
+    title: '红羽',
+    content: '另一个名字',
+  ), now: now);
+  check('相似标题仍然合并进同一份', shortTitle.length == 1);
+  check('标题取更完整的那个', shortTitle.first.title == '红羽离笼记');
+
+  final distinctCreation = creationBook.merge(shortTitle, const CreationDraft(
+    title: '雨中迷宫',
+    kind: '游戏',
+  ), now: now);
+  check('不同作品各自成条', distinctCreation.length == 2);
+
+  final manyCreations = [
+    for (var i = 0; i < CreationNote.maxNotes + 3; i++)
+      CreationNote(
+        id: 'c$i',
+        title: '稿子$i',
+        kind: '设定',
+        content: '',
+        createdAt: now.toIso8601String(),
+        updatedAt: now.add(Duration(minutes: i)).toIso8601String(),
+      ),
+  ];
+  check('创作稿条数被限制在上限内',
+      creationBook.prune(manyCreations).length == CreationNote.maxNotes);
+  check('裁剪后保留最近碰过的那份',
+      creationBook
+          .prune(manyCreations)
+          .any((n) => n.id == 'c${manyCreations.length - 1}'));
+  check('空标题被丢弃',
+      creationBook.prune([
+        const CreationNote(
+          id: 'x',
+          title: '   ',
+          kind: '其他',
+          content: '',
+          createdAt: '2026-09-01T00:00:00.000',
+          updatedAt: '2026-09-01T00:00:00.000',
+        ),
+      ]).isEmpty);
+
+  // ------------------------------------------------------------ 前缀噪音清洗
+  section('存档清洗（带动态尾巴的报错）');
+  final legacyWithErrors = jsonEncode({
+    'type': 'beyond-time-library-archive',
+    'version': 1,
+    'messages': [
+      {'role': 'user', 'content': '有人在吗'},
+      {
+        'role': 'assistant',
+        'content': '连接没有成功：SocketException: 无法连接',
+      },
+      {'role': 'assistant', 'content': '还没有填写 API Key。先打开右上角设置，亲爱的。'},
+      {'role': 'assistant', 'content': '我在。'},
+    ],
+    'libraryMemory': <dynamic>[],
+    'quickOptionPoolIndex': 0,
+  });
+  final legacyParsed = LibraryArchive.tryParse(legacyWithErrors);
+  check('带动态尾巴的报错被前缀匹配清掉',
+      legacyParsed != null &&
+          !legacyParsed.messages
+              .any((m) => m.content.contains('连接没有成功')));
+  check('API Key 提示不会残留',
+      legacyParsed != null &&
+          !legacyParsed.messages.any((m) => m.content.contains('API Key')));
+  check('真实对话仍然保留',
+      legacyParsed != null &&
+          legacyParsed.messages.any((m) => m.content == '我在。'));
+
+  // v2 存档没有 creations 字段，导入时必须是空列表而不是解析失败。
+  final v2Archive = LibraryArchive.tryParse(jsonEncode({
+    'type': 'beyond-time-library-archive',
+    'version': 2,
+    'messages': [
+      {'role': 'user', 'content': '旧存档的一句话'},
+    ],
+    'libraryMemory': <dynamic>[],
+    'openThreads': <dynamic>[],
+    'quickOptionPoolIndex': 2,
+  }));
+  check('v2 存档仍然能导入', v2Archive != null);
+  check('缺少 creations 字段时按空列表处理',
+      v2Archive != null && v2Archive.creations.isEmpty);
+
+  // 只有创作稿、没有对话的存档也要能解析（否则导入会显示"读不出来"）。
+  final creationsOnly = LibraryArchive.tryParse(jsonEncode({
+    'type': 'beyond-time-library-archive',
+    'version': 3,
+    'messages': <dynamic>[],
+    'libraryMemory': <dynamic>[],
+    'openThreads': <dynamic>[],
+    'creations': [
+      {
+        'id': 'c1',
+        'title': '红羽离笼记',
+        'kind': '故事',
+        'content': '一段设定',
+        'createdAt': '2026-09-01T00:00:00.000',
+        'updatedAt': '2026-09-01T00:00:00.000',
+      },
+    ],
+    'quickOptionPoolIndex': 0,
+  }));
+  check('只有创作稿的存档不算空', creationsOnly != null);
+  check('创作稿被解析出来',
+      creationsOnly != null &&
+          creationsOnly.creations.length == 1 &&
+          creationsOnly.creations.first.title == '红羽离笼记');
+
   // ------------------------------------------------------------ 记忆整理解析
   section('记忆整理解析（C3 提取）');
   final service = MemoryCaptureService(ChatApiClient());
@@ -332,6 +537,72 @@ void main() {
   check('超长依据被裁剪到上限内',
       (overlong.memory?.evidence.length ?? 0) <= kMaxMemoryEvidenceLength + 1);
 
+  final creationOutcome = service.parseOutcome(
+    '{"shouldRemember": false, "openThread": null, "resolveThreadId": null,'
+    ' "creation": {"title": "红羽离笼记", "kind": "故事",'
+    ' "content": "红发少女把推免函折成鸟，暗红马尾在异国的风里散开"}}',
+    existingMemories: const [],
+    openThreads: const [],
+  );
+  check('创作稿被解析出来', creationOutcome.creation != null);
+  check('创作稿标题正确', creationOutcome.creation?.title == '红羽离笼记');
+  check('创作稿类型正确', creationOutcome.creation?.kind == '故事');
+  check('只有创作稿时结果不为空', !creationOutcome.isEmpty);
+
+  final weirdKind = service.parseOutcome(
+    '{"shouldRemember": false, "openThread": null, "resolveThreadId": null,'
+    ' "creation": {"title": "某个设定", "kind": "小说", "content": "x"}}',
+    existingMemories: const [],
+    openThreads: const [],
+  );
+  check('不在白名单里的类型回落为「其他」', weirdKind.creation?.kind == '其他');
+
+  final emptyCreation = service.parseOutcome(
+    '{"shouldRemember": false, "openThread": null, "resolveThreadId": null,'
+    ' "creation": {"title": "我", "kind": "其他", "content": "x"}}',
+    existingMemories: const [],
+    openThreads: const [],
+  );
+  check('空泛到只剩一个字的标题被丢弃', emptyCreation.creation == null);
+  check('被丢弃后结果为空', emptyCreation.isEmpty);
+
+  final overlongCreation = service.parseOutcome(
+    '{"shouldRemember": false, "openThread": null, "resolveThreadId": null,'
+    ' "creation": {"title": "${'很' * 60}长的名字", "kind": "设定",'
+    ' "content": "${'设定' * 200}"}}',
+    existingMemories: const [],
+    openThreads: const [],
+  );
+  check('超长创作稿标题被裁剪',
+      (overlongCreation.creation?.title.length ?? 0) <=
+          CreationNote.maxTitleLength);
+  check('超长创作稿内容被裁剪',
+      (overlongCreation.creation?.content.length ?? 0) <=
+          CreationNote.maxContentLength + 1);
+
+  check('整理员看得到现有创作稿标题（避免另开一条）',
+      service.creationDigest([
+        const CreationNote(
+          id: 'c1',
+          title: '红羽离笼记',
+          kind: '故事',
+          content: '不该出现在摘要里的正文',
+          createdAt: '2026-09-01T00:00:00.000',
+          updatedAt: '2026-09-01T00:00:00.000',
+        ),
+      ]).contains('红羽离笼记'));
+  check('创作稿摘要不包含正文',
+      !service.creationDigest([
+        const CreationNote(
+          id: 'c1',
+          title: '红羽离笼记',
+          kind: '故事',
+          content: '不该出现在摘要里的正文',
+          createdAt: '2026-09-01T00:00:00.000',
+          updatedAt: '2026-09-01T00:00:00.000',
+        ),
+      ]).contains('不该出现在摘要里的正文'));
+
   // ------------------------------------------------------------ 上下文过滤
   section('上下文组装');
   final context = const ConversationContext().buildMessages(
@@ -350,6 +621,16 @@ void main() {
     ],
     memories: [fact('来访者喜欢轨迹系列的生活气')],
     threads: [thread('t1', '保研还是去海外')],
+    creations: [
+      const CreationNote(
+        id: 'c1',
+        title: '红羽离笼记',
+        kind: '故事',
+        content: '红发少女把推免函折成一只鸟',
+        createdAt: '2026-09-01T00:00:00.000',
+        updatedAt: '2026-09-01T00:00:00.000',
+      ),
+    ],
   );
   final dialogue = context
       .where((m) => m['role'] == 'user' || m['role'] == 'assistant')
@@ -363,6 +644,34 @@ void main() {
       dialogue.any((c) => c.contains('我昨天买了一张书签')));
   check('未决之事作为系统提示注入',
       context.any((m) => m['content']!.contains('保研还是去海外')));
+  check('来访者的创作稿作为系统提示注入',
+      context.any((m) => m['content']!.contains('红羽离笼记')));
+  check('创作稿提示写明那是他的东西，不是她的',
+      context.any((m) =>
+          m['content']!.contains('红羽离笼记') && m['content']!.contains('不是你的')));
+  check('反谄媚纪律被注入',
+      context.any((m) => m['content'] == ConversationContext.antiFlatteryInstruction));
+  check('反谄媚纪律点出了体检工具在量的两个特征',
+      ConversationContext.antiFlatteryInstruction.contains('不要用') &&
+          ConversationContext.antiFlatteryInstruction.contains('保留'));
+
+  // 记忆注入必须分栏：书签以"收藏"的身份出现，而不是被当成对来访者的描述。
+  final splitContext = const ConversationContext().buildMessages(
+    persona: '人设',
+    messages: const [ChatMessage(role: 'user', content: '我最近在写一个雨中的迷宫游戏')],
+    memories: [
+      fact('来访者想做一个雨中的迷宫游戏'),
+      bookmark('亲爱的，您不必继续把灵魂交给一个不断改价的柜台。'),
+    ],
+  );
+  final factBlock = splitContext
+      .firstWhere((m) => m['content']!.contains('图书馆记忆'));
+  final bookmarkBlock =
+      splitContext.firstWhere((m) => m['content']!.contains('亲手收进图书馆'));
+  check('事实与书签分成两个系统块',
+      !factBlock['content']!.contains('不断改价的柜台'));
+  check('书签块说明那是收藏而不是对他的描述',
+      bookmarkBlock['content']!.contains('不是对他的描述'));
 
   // ------------------------------------------------------------ 收尾
   print('');

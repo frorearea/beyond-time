@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../config.dart';
+import '../models/creation_note.dart';
 import '../models/library_memory_item.dart';
 import '../models/open_thread.dart';
 import 'chat_api.dart';
@@ -10,15 +11,26 @@ import 'chat_api.dart';
 /// v2 起，同一次调用还会顺带维护"未决之事"（C3）：来访者提过的悬案，
 /// 以及某件旧悬案是否已经落地。合并成一次请求而不是两次，
 /// 是因为成本与延迟都要翻倍，而这些信息来自同一段对话。
+///
+/// v3 起再多产出一份"创作稿"：来访者自己的设定、名字与片段。
 class CaptureOutcome {
-  const CaptureOutcome({this.memory, this.threadDraft, this.resolveThreadId});
+  const CaptureOutcome({
+    this.memory,
+    this.threadDraft,
+    this.creation,
+    this.resolveThreadId,
+  });
 
   final LibraryMemoryItem? memory;
   final OpenThreadDraft? threadDraft;
+  final CreationDraft? creation;
   final String? resolveThreadId;
 
   bool get isEmpty =>
-      memory == null && threadDraft == null && resolveThreadId == null;
+      memory == null &&
+      threadDraft == null &&
+      creation == null &&
+      resolveThreadId == null;
 
   static const CaptureOutcome nothing = CaptureOutcome();
 }
@@ -44,6 +56,7 @@ class MemoryCaptureService {
     required String assistantReply,
     required List<LibraryMemoryItem> existingMemories,
     required List<OpenThread> existingThreads,
+    List<CreationNote> existingCreations = const [],
     required String apiKey,
     required String apiUrl,
     required String model,
@@ -65,11 +78,14 @@ ${memoryDigest(existingMemories)}
 现有未决之事：
 ${threadDigest(openThreads)}
 
+现有创作稿：
+${creationDigest(existingCreations)}
+
 最近这轮对话：
 来访者：$compactUserText
 艾蕾塔：${assistantReply.replaceAll(RegExp(r'\s+'), ' ').trim()}
 
-请判断是否需要新增一条记忆、是否需要记下一件未决之事、以及是否有旧悬案已经落地。只输出如下 JSON：
+请判断是否需要新增一条记忆、是否需要记下一件未决之事、是否需要留存一份来访者自己的创作稿、以及是否有旧悬案已经落地。只输出如下 JSON：
 {
   "shouldRemember": true 或 false,
   "category": "喜好/压力/热爱/困扰/创作/关系/自我理解/其他",
@@ -77,13 +93,14 @@ ${threadDigest(openThreads)}
   "evidence": "最短的来访者原话依据，不超过$kMaxMemoryEvidenceLength字",
   "confidence": 0.0 到 1.0,
   "openThread": {"topic": "不超过16字的名词短语", "detail": "不超过${OpenThread.maxDetailLength}字"} 或 null,
+  "creation": {"title": "他自己作品的名字或短名词短语", "kind": "设定/故事/游戏/角色/诗/其他", "content": "不超过${CreationNote.maxContentLength}字的要点或片段，尽量用他自己的说法"} 或 null,
   "resolveThreadId": "要标记为已解决的未决之事 id，没有就填 null"
 }
 ''',
           },
         ],
         'temperature': 0.15,
-        'max_tokens': 400,
+        'max_tokens': 520,
         'stream': true,
         'stream_options': {'include_usage': false},
       },
@@ -93,7 +110,9 @@ ${threadDigest(openThreads)}
     );
 
     return parseOutcome(raw,
-        existingMemories: existingMemories, openThreads: openThreads);
+        existingMemories: existingMemories,
+        openThreads: openThreads,
+        existingCreations: existingCreations);
   }
 
   static const String _systemPrompt =
@@ -111,6 +130,15 @@ ${threadDigest(openThreads)}
       '\n- openThread.detail 补充一两句背景，方便以后回想起来。'
       '\n- 如果现有未决之事里有一件已经明确落地（做完了、决定了、放弃了），'
       '把它的 id 填进 resolveThreadId，否则填 null。'
+      '\n\n你还要留意"来访者自己的创作"：他亲手写下的设定、故事名、角色、片段、点子，'
+      '包括他正在做的游戏或小说。'
+      '\n- 只在**他在讲自己的东西**时填 creation，否则填 null。'
+      '只是喜欢、讨论、推荐别人的作品不算创作，也不要因为他说"我想做个游戏"这种'
+      '空泛愿望就记一份稿子——要真的出现了名字、设定或片段。'
+      '\n- creation.title 是他自己作品的名字或一个短名词短语（例如"红羽离笼记""那个雨中迷宫"），'
+      '不要用"来访者的创作"这种空标题。'
+      '\n- creation.content 尽量保留他自己的用词，不要替他把设定写得更好、更完整。'
+      '\n- 如果现有创作稿里已经有同一份，就在它基础上补充，不要另开一条。'
       '\n只输出 JSON，不要输出解释。';
 
   /// 供记忆整理读取的现有记忆摘要（书签不参与，避免整理员被金句带跑）。
@@ -137,11 +165,23 @@ ${threadDigest(openThreads)}
         .join('\n');
   }
 
+  /// 现有创作稿摘要，让整理员知道哪份稿子已经有了、该补充而不是另开一条。
+  ///
+  /// 只给标题和类型，不给正文：正文越长，整理员越容易照抄或顺着改写，
+  /// 而我们要的是"他自己新说的话"。
+  String creationDigest(List<CreationNote> creations) {
+    if (creations.isEmpty) return '无';
+    return creations
+        .map((note) => '- [${note.kind}] ${note.title}')
+        .join('\n');
+  }
+
   /// 解析整理员的输出。纯函数，便于单测。
   CaptureOutcome parseOutcome(
     String raw, {
     required List<LibraryMemoryItem> existingMemories,
     required List<OpenThread> openThreads,
+    List<CreationNote> existingCreations = const [],
   }) {
     final jsonText = _extractJsonObject(raw);
     if (jsonText == null) return CaptureOutcome.nothing;
@@ -156,6 +196,7 @@ ${threadDigest(openThreads)}
     return CaptureOutcome(
       memory: _parseMemory(data, existingMemories),
       threadDraft: _parseThread(data),
+      creation: _parseCreation(data, existingCreations),
       resolveThreadId: _parseResolvedId(data, openThreads),
     );
   }
@@ -199,6 +240,35 @@ ${threadDigest(openThreads)}
         OpenThread.maxDetailLength,
       ),
     );
+  }
+
+  /// 解析来访者自己的创作稿。标题太短的一律丢弃，避免"我的故事"这类空标题堆积。
+  CreationDraft? _parseCreation(
+    Map<String, dynamic> data,
+    List<CreationNote> existingCreations,
+  ) {
+    final raw = data['creation'];
+    if (raw is! Map<String, dynamic>) return null;
+    final title = (raw['title']?.toString() ?? '').trim();
+    if (title.length < 2) return null;
+    final clamped = CreationNote.clamp(title, CreationNote.maxTitleLength);
+    // 已经有同一份稿子时仍然返回，交给 CreationBook 去就地合并。
+    return CreationDraft(
+      title: clamped,
+      kind: _normalizeKind(raw['kind']?.toString()),
+      content: _clampAtBoundary(
+        (raw['content']?.toString() ?? '').trim(),
+        CreationNote.maxContentLength,
+      ),
+    );
+  }
+
+  static String _normalizeKind(String? value) {
+    final kind = (value ?? '').trim();
+    for (final candidate in CreationNote.kinds) {
+      if (candidate == kind) return kind;
+    }
+    return '其他';
   }
 
   /// 只接受确实存在于现有列表里的 id，避免模型凭空造一个 id 把无关条目标记为已解决。

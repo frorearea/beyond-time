@@ -51,7 +51,7 @@ const stat = (a) =>
 console.log(`存档：${src}`);
 console.log(`导出时间 ${j.exportedAt}　格式 v${version}`);
 console.log(
-  `消息 ${msgs.length}（艾蕾塔 ${A.length} / 来访者 ${U.length}）　记忆 ${(j.libraryMemory ?? []).length}　未决之事 ${threads.length}　心声进度 ${j.quickOptionPoolIndex}`,
+  `消息 ${msgs.length}（艾蕾塔 ${A.length} / 来访者 ${U.length}）　记忆 ${(j.libraryMemory ?? []).length}　未决之事 ${threads.length}　创作稿 ${(j.creations ?? []).length}　心声进度 ${j.quickOptionPoolIndex}`,
 );
 
 line('1. 存档洁净度');
@@ -77,7 +77,7 @@ console.log(
 if (version >= 2) {
   const kinds = {};
   for (const m of msgs) kinds[m.kind ?? 'chat'] = (kinds[m.kind ?? 'chat'] ?? 0) + 1;
-  console.log(`消息种类分布：${JSON.stringify(kinds)}（v2 只应出现 chat）`);
+  console.log(`消息种类分布：${JSON.stringify(kinds)}（v2 起只应出现 chat）`);
 }
 
 line('2. 回复长度与截断');
@@ -121,10 +121,30 @@ for (const m of mem) byCat[m.category] = (byCat[m.category] ?? 0) + 1;
 console.log(`分类分布：${JSON.stringify(byCat)}`);
 const bookmarks = mem.filter((m) => m.category === '书签' || m.source === '手动书签');
 console.log(`书签占比：${pct(bookmarks.length, mem.length)}　（书签有自己的书架，不算关于来访者的事实）`);
-const injected = mem.slice(-12); // 复现 conversation_context.dart 的注入策略
+const injected = mem.slice(-12); // 旧的"最近 12 条"策略，留作对照
+const factsInjected = mem
+  .filter((m) => m.category !== '书签' && m.source !== '手动书签')
+  .slice(-9); // 复现 lib/config.dart 的 kMaxInjectedFacts
+const bookmarksInjected = bookmarks.slice(-3); // 复现 kMaxInjectedBookmarks
+const quotaInjected = [...factsInjected, ...bookmarksInjected];
 console.log(
-  `按当前策略注入的最近 12 条 ≈ ${injected.reduce((a, m) => a + m.content.length + (m.evidence ?? '').length, 0)} 字符`,
+  `旧策略（最近 12 条，不看书签身份）≈ ${injected.reduce((a, m) => a + m.content.length + (m.evidence ?? '').length, 0)} 字符`,
 );
+console.log(
+  `新策略（事实 ≤9 / 书签 ≤3 的配额上限；实际还会按话题挑，只会更少）≈ ${quotaInjected.reduce((a, m) => a + m.content.length + (m.evidence ?? '').length, 0)} 字符`,
+);
+console.log(
+  `  配额里事实 ${factsInjected.length} 条 vs 书签 ${bookmarksInjected.length} 条　（旧策略可能整份额度被书签吃掉）`,
+);
+const creations = j.creations ?? [];
+if (creations.length) {
+  console.log(`创作稿：${creations.length} 份`);
+  for (const c of creations.slice(0, 6)) {
+    console.log(`  · 「${c.title}」[${c.kind ?? '其他'}] ${(c.content ?? '').slice(0, 40)}`);
+  }
+} else {
+  console.log('创作稿：0 份（v2 及更早的存档不含此数据）');
+}
 if (threads.length) {
   const open = threads.filter((t) => (t.status ?? 'open') === 'open');
   console.log(`未决之事：${open.length} 件还悬着 / ${threads.length - open.length} 件已有下文`);

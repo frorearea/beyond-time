@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:beyond_time/config.dart';
+import 'package:beyond_time/models/creation_note.dart';
 import 'package:beyond_time/models/open_thread.dart';
 import 'package:beyond_time/pages/beyond_time_page.dart';
 import 'package:beyond_time/services/key_value_store.dart';
@@ -139,9 +140,43 @@ void main() {
     await teardown(tester);
   });
 
-  testWidgets('存档面板能打开并显示三个板块计数', (tester) async {
+  testWidgets('记忆面板展示来访者自己留下的创作稿', (tester) async {
+    useRealisticWindow(tester);
+    final session = await pumpApp(tester);
+    session.mergeCreationForTest(const CreationDraft(
+      title: '红羽离笼记',
+      kind: '故事',
+      content: '红发少女把推免函折成一只鸟',
+    ));
+
+    await tester.tap(find.text('记忆').first);
+    await settle(tester);
+
+    expect(find.text('你写下的东西'), findsOneWidget);
+    expect(find.textContaining('红羽离笼记'), findsOneWidget);
+    // 没有创作稿时这一块完全不该出现（避难所不长空壳）。
+    expect(tester.takeException(), isNull);
+
+    await teardown(tester);
+  });
+
+  testWidgets('没有创作稿时，记忆面板不出现空区块', (tester) async {
     useRealisticWindow(tester);
     await pumpApp(tester);
+
+    await tester.tap(find.text('记忆').first);
+    await settle(tester);
+
+    expect(find.text('你写下的东西'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    await teardown(tester);
+  });
+
+  testWidgets('存档面板能打开并显示四个板块计数', (tester) async {
+    useRealisticWindow(tester);
+    final session = await pumpApp(tester);
+    session.mergeCreationForTest(const CreationDraft(title: '红羽离笼记'));
 
     await tester.tap(find.text('存档').first);
     await settle(tester);
@@ -150,7 +185,27 @@ void main() {
     expect(find.text('对话记录'), findsOneWidget);
     expect(find.text('图书馆记忆'), findsOneWidget);
     expect(find.text('还悬着的事'), findsOneWidget);
+    expect(find.text('你写下的东西'), findsOneWidget);
+    expect(find.text('1 份'), findsOneWidget);
     expect(tester.takeException(), isNull);
+
+    await teardown(tester);
+  });
+
+  // 存档面板是固定高度的 Column；v3 多了一个板块计数，矮窗口下容易溢出。
+  testWidgets('矮窗口下存档面板不溢出', (tester) async {
+    tester.view.physicalSize = const Size(1280, 600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await pumpApp(tester);
+
+    await tester.tap(find.text('存档').first);
+    await settle(tester);
+
+    expect(tester.takeException(), isNull,
+        reason: '矮窗口下侧栏面板不应出现 RenderFlex overflow');
 
     await teardown(tester);
   });

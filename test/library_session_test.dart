@@ -4,6 +4,7 @@ import 'package:beyond_time/config.dart';
 import 'package:beyond_time/data/return_lines.dart';
 import 'package:beyond_time/models/api_settings.dart';
 import 'package:beyond_time/models/chat_message.dart';
+import 'package:beyond_time/models/creation_note.dart';
 import 'package:beyond_time/models/library_archive.dart';
 import 'package:beyond_time/models/library_memory_item.dart';
 import 'package:beyond_time/models/open_thread.dart';
@@ -36,8 +37,19 @@ void main() {
   group('会话初始化', () {
     test('首次进入展示开场白并写入 lastVisit', () {
       final s = buildSession();
-      expect(s.session.messages.single.content, contains('进来吧'));
+      expect(s.session.messages.first.content, contains('进来吧'));
       expect(s.store.read(kLastVisitKey), isNotNull);
+      s.session.dispose();
+    });
+
+    test('开场就把作品递出来，让访客知道可以从哪儿开口', () {
+      final s = buildSession();
+      final opening = s.session.messages;
+      expect(opening.length, 2);
+      expect(opening.last.content, contains('游戏'));
+      expect(opening.last.content, contains('动画'));
+      // 开场两句话都属于真实对话，不会被序列化边界过滤掉。
+      expect(opening.every((m) => m.isChat), isTrue);
       s.session.dispose();
     });
 
@@ -69,7 +81,7 @@ void main() {
         kLastVisitKey:
             DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(),
       });
-      expect(s.session.messages.single.content, contains('进来吧'));
+      expect(s.session.messages.first.content, contains('进来吧'));
       s.session.dispose();
     });
 
@@ -220,6 +232,80 @@ void main() {
       // 落盘了
       final stored = jsonDecode(s.store.read(kOpenThreadsKey)!) as List<dynamic>;
       expect(stored.length, 1);
+      s.session.dispose();
+    });
+  });
+
+  group('来访者原创留档', () {
+    test('可以记下、合并自己的创作稿并落盘', () {
+      final s = buildSession();
+      s.session.mergeCreationForTest(const CreationDraft(
+        title: '红羽离笼记',
+        kind: '故事',
+        content: '红发少女把推免函折成一只鸟',
+      ));
+      expect(s.session.creations.length, 1);
+      expect(s.session.sortedCreations.first.title, '红羽离笼记');
+
+      s.session.mergeCreationForTest(const CreationDraft(
+        title: '红羽离笼记',
+        content: '补了一句：她在风里散开发绳',
+      ));
+      expect(s.session.creations.length, 1, reason: '同一份稿子应合并');
+      expect(s.session.creations.first.content, contains('散开发绳'));
+
+      final stored = jsonDecode(s.store.read(kCreationsKey)!) as List<dynamic>;
+      expect(stored.length, 1);
+      s.session.dispose();
+    });
+
+    test('导出把创作稿写进存档，导入再原样读回来', () {
+      final s = buildSession();
+      s.session.mergeCreationForTest(const CreationDraft(
+        title: '雨中迷宫',
+        kind: '游戏',
+        content: '第一层的怪会报时',
+      ));
+
+      final exported = jsonDecode(s.session.buildArchiveText())
+          as Map<String, dynamic>;
+      expect(exported['version'], LibraryArchive.currentVersion);
+      expect((exported['creations'] as List).length, 1);
+
+      final other = buildSession();
+      expect(other.session.importArchive(jsonEncode(exported)), ImportStatus.ok);
+      expect(other.session.creations.single.title, '雨中迷宫');
+      expect(other.session.creations.single.kind, '游戏');
+      s.session.dispose();
+      other.session.dispose();
+    });
+
+    test('导入 v2 旧存档不会因为缺少 creations 字段而失败', () {
+      final legacy = jsonEncode({
+        'type': 'beyond-time-library-archive',
+        'version': 2,
+        'messages': [
+          {'role': 'user', 'content': '旧存档里的一句话'},
+        ],
+        'libraryMemory': <dynamic>[],
+        'openThreads': <dynamic>[],
+        'quickOptionPoolIndex': 1,
+      });
+
+      final s = buildSession();
+      expect(s.session.importArchive(legacy), ImportStatus.ok);
+      expect(s.session.creations, isEmpty);
+      s.session.dispose();
+    });
+
+    test('清空图书馆同时清掉创作稿', () {
+      final s = buildSession();
+      s.session.mergeCreationForTest(const CreationDraft(title: '一份稿子'));
+      expect(s.store.read(kCreationsKey), isNotNull);
+
+      s.session.resetEverything();
+      expect(s.session.creations, isEmpty);
+      expect(s.store.read(kCreationsKey), isNull);
       s.session.dispose();
     });
   });

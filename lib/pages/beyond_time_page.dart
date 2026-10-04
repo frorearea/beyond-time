@@ -9,6 +9,7 @@ import '../services/tarot_reading_service.dart';
 import '../theme.dart';
 import '../widgets/archive_panel.dart';
 import '../widgets/candle_glow.dart';
+import '../widgets/creation_section.dart';
 import '../widgets/dialogue_box.dart';
 import '../widgets/memory_panel.dart';
 import '../widgets/settings_panel.dart';
@@ -436,8 +437,14 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
           alignment: Alignment.centerRight,
           child: MemoryPanel(
             memories: _session.knowledgeMemories,
-            header: ThreadSection(
-              threads: [..._session.openThreads, ..._session.resolvedThreads],
+            header: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ThreadSection(
+                  threads: [..._session.openThreads, ..._session.resolvedThreads],
+                ),
+                CreationSection(creations: _session.sortedCreations),
+              ],
             ),
           ),
         );
@@ -473,6 +480,7 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
             messageCount: _session.conversationHistory.length,
             memoryCount: _session.memories.length,
             threadCount: _session.threads.length,
+            creationCount: _session.creations.length,
             onExport: _exportArchive,
             onImport: _importArchive,
             onClearAll: _confirmClearArchive,

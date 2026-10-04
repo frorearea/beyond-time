@@ -8,6 +8,7 @@ class ArchivePanel extends StatelessWidget {
     required this.messageCount,
     required this.memoryCount,
     required this.threadCount,
+    required this.creationCount,
     required this.onExport,
     required this.onImport,
     required this.onClearAll,
@@ -16,6 +17,7 @@ class ArchivePanel extends StatelessWidget {
   final int messageCount;
   final int memoryCount;
   final int threadCount;
+  final int creationCount;
   final VoidCallback onExport;
   final VoidCallback onImport;
   final VoidCallback onClearAll;
@@ -49,31 +51,45 @@ class ArchivePanel extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              '保存这段来访、书签与记忆。API Key 不会写进存档。',
+              '保存这段来访、书签、记忆，以及你自己写下的东西。API Key 不会写进存档。',
               style: TextStyle(color: Color(0x99FFFFFF), fontSize: 12),
             ),
-            const SizedBox(height: 22),
-            _ArchiveStat(label: '对话记录', value: '$messageCount 条'),
-            const SizedBox(height: 10),
-            _ArchiveStat(label: '图书馆记忆', value: '$memoryCount 条'),
-            const SizedBox(height: 10),
-            _ArchiveStat(label: '还悬着的事', value: '$threadCount 件'),
-            const SizedBox(height: 26),
-            _ArchiveAction(
-              title: '导出图书馆存档',
-              description: '生成一个可以带走的 JSON 文件。',
-              onTap: onExport,
+            const SizedBox(height: 18),
+            // 页眉固定 + 中段可滚动 + 底部按钮固定：v3 多了「你写下的东西」
+            // 之后，这个面板在 1280x600 这类矮窗口会溢出 23px（有回归测试兜底）。
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _ArchiveStat(label: '对话记录', value: '$messageCount 条'),
+                    const SizedBox(height: 10),
+                    _ArchiveStat(label: '图书馆记忆', value: '$memoryCount 条'),
+                    const SizedBox(height: 10),
+                    _ArchiveStat(label: '还悬着的事', value: '$threadCount 件'),
+                    const SizedBox(height: 10),
+                    _ArchiveStat(
+                        label: '你写下的东西', value: '$creationCount 份'),
+                    const SizedBox(height: 24),
+                    _ArchiveAction(
+                      title: '导出图书馆存档',
+                      description: '生成一个可以带走的 JSON 文件。',
+                      onTap: onExport,
+                    ),
+                    const SizedBox(height: 12),
+                    _ArchiveAction(
+                      title: '导入图书馆存档',
+                      description: '用旧存档恢复对话、记忆、创作稿与心声进度。',
+                      onTap: onImport,
+                    ),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             _ArchiveAction(
-              title: '导入图书馆存档',
-              description: '用旧存档恢复对话、记忆与心声进度。',
-              onTap: onImport,
-            ),
-            const Spacer(),
-            _ArchiveAction(
               title: '清空图书馆',
-              description: '删除本机保存的对话、记忆与心声进度。',
+              description: '删除本机保存的对话、记忆、创作稿与心声进度。',
               onTap: onClearAll,
               danger: true,
             ),

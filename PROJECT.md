@@ -1,7 +1,7 @@
 # 时间之外 · Beyond Time — 项目主文档
 
 > **本文件是项目唯一权威文档。** 每次修改代码前先读本文件；功能新增、删除、重命名、架构调整后必须同步更新本文件。
-> 最后更新：2026-09-12
+> 最后更新：2026-10-04
 
 ---
 
@@ -26,12 +26,16 @@
 |---|---|---|
 | 流式对话 | DeepSeek API，打字机效果，thinking 开启 | `lib/services/chat_api_*.dart` |
 | 回复完整性 | 用 `finish_reason` 判定截断，自动续写一次；上限 1000 tokens | `lib/services/reply_completer.dart`、`sse_parser.dart` |
+| **开场第二句** | 她把手边的游戏与动画碟递出来，新访客知道可以从哪儿开口 | `library_session.dart` 的 `_openingMessages` |
 | 心声快速选项 | 38 组轮换，进度持久化；可折叠（默认关闭） | `lib/data/quick_options.dart`、`lib/widgets/quick_options.dart` |
 | 图书馆记忆 | LLM 自动提炼（上限 32 条），裁剪时**优先丢弃事实、永不丢书签** | `lib/services/memory_capture_service.dart`、`memory_book.dart` |
+| **记忆相关性检索 + 分栏配额** | 按当前话题挑记忆；事实 ≤9 条 / 书签 ≤3 条，书签不再挤占事实 | `lib/services/memory_selector.dart`、`lib/config.dart` |
+| **反谄媚回合纪律** | 显式注入：不用承接词起手、每轮至少一处真实保留（痛苦时豁免） | `conversation_context.dart` 的 `antiFlatteryInstruction` |
+| **来访者原创留档** | 他自己的设定、名字与片段独立留存，并注入上下文；她不得替他改写 | `lib/models/creation_note.dart`、`creation_book.dart`、`creation_section.dart` |
 | **书架（书签）** | 选中她的句子收进独立书架，与「记忆」分栏展示 | `lib/widgets/shelf_panel.dart`、`bookmark_service.dart` |
 | **未决之事** | 自动记下来访者提过、还没下文的牵挂；回来时她会问起 | `lib/models/open_thread.dart`、`thread_book.dart`、`return_arc.dart` |
 | 塔罗占卜 | 「关于来访者的事实」≥5 条解锁（书签不计入），三张牌 + 记忆结合解读 | `lib/services/tarot_reading_service.dart` |
-| 存档/恢复 | 对话+记忆+未决之事+心声进度 JSON 导入导出（v2） | `lib/services/archive_service_*.dart`、`lib/models/library_archive.dart` |
+| 存档/恢复 | 对话+记忆+未决之事+创作稿+心声进度 JSON 导入导出（v3） | `lib/services/archive_service_*.dart`、`lib/models/library_archive.dart` |
 | 双布局 | classic（舞台）/ storybook（书卷），宽度 <640 自动降级 | `lib/pages/beyond_time_page.dart` |
 | 用户个性化画像 | 话题/情绪/称呼/亲近度规则分析，注入 system prompt | `lib/models/user_profile.dart` |
 | idle 微状态 | 无操作 5 分钟后随机环境台词（仅触发一次） | `lib/data/idle_lines.dart` |
@@ -43,12 +47,14 @@
 
 ### 待办/可探索方向（按优先级）
 
-- **记忆相关性检索**：目前是最近 12 条倒序注入，其中常有大半是书签（2026-09-12 存档：21 条记忆里 14 条是书签）。应按当前话题打分取 Top-N，并给书签设注入配额
-- **反谄媚**：2026-09-12 存档实测——35% 的回复以附和词开头，只有 10% 含转折/保留意见。「小恶魔、挑剔、取笑品味」在 101 条真实回复里只出现过一次
-- **称呼一致性**：同一份存档里 84 条用「你」、9 条用「您」，且从某一轮开始整体切换且不再切回
+- **作品真值（书架清单）**：谈游戏/动画效果很好，谈书则幻觉严重——`temperature: 1.35` 下模型会把书名与作者拼错，人设里"不确定就别编作品名"是**无效的自我检查**（模型没有可靠的"我知不知道"信号）。唯一可靠的做法是**封闭集**：新增一份真实作品清单，只许从清单里报书名。因为要花心思选书，且与人设"不要绑定固定书单"冲突，尚未动工。详见第七节
+- **补上"书"的开场提示**：开场第二句刻意只提了游戏与动画。等书架清单落地后再补"书"那一格——现在加等于把访客领进她唯一会编的领域
+- **反谄媚（第二版）**：2026-10-04 已注入显式回合纪律，但**尚未用新存档验证**。基线：30% 以附和词开头、13% 含转折（目标 ≤15% / ≥25%）
+- **称呼一致性**：清洗存档后污染行消失，预期会好转；需新存档确认。人设统一用「您」，而 `return_lines.dart` / `idle_lines.dart` 全用「你」（28 : 0），两者口径不一致
 - 角色状态（她当前在做什么）+ 时间段感知（深夜语调更轻）
 - 响应前 0.5-1.5s 停顿，体现"她在想"
-- 让来访者的原创（设定、故事名、片段）有地方留存与回访
+- 创作稿目前**只读**：来访者不能自己删改或手写一份（`CreationSection` 无操作按钮，与 `ThreadSection` 保持一致）
+- 输出:输入 = 1 : 8.1（2026-09-17 存档）。问题不是"她说得长"（是故意加长的，好让她把作品观点讲完），而是**一回合铺 2-3 个话题 + 频繁问句收尾**
 
 ---
 
@@ -79,7 +85,9 @@ BeyondTimePage（lib/pages/beyond_time_page.dart）
 
 纯逻辑支线（不 import flutter，可零依赖单测）
   ├─ services/thread_book.dart      未决之事的合并/解决/裁剪/相似度
+  ├─ services/creation_book.dart    来访者创作稿的合并/裁剪/排序（复用未决之事的相似度）
   ├─ services/memory_book.dart      记忆上限与"永不丢书签"策略
+  ├─ services/memory_selector.dart  记忆注入的话题检索 + 分栏配额
   ├─ services/return_arc.dart       档位判定 + 回归问候选材
   ├─ services/reply_completer.dart  截断判定 + 自动续写
   └─ services/sse_parser.dart       SSE 增量与 finish_reason 解析
@@ -98,15 +106,18 @@ lib/
   main.dart / app.dart / config.dart / theme.dart
   data/          心声、idle 台词、回归台词（含未决之事模板）+ 档位判定数据
   models/        chat_message(含 MessageKind) / api_settings / open_thread /
-                 library_archive(v2) / library_memory_item / tarot_card / user_profile
+                 creation_note / library_archive(v3) / library_memory_item /
+                 tarot_card / user_profile
   pages/         beyond_time_page.dart（视图层，仅布局与对话框）
   services/      library_session.dart（会话状态机，编排中心）
                  chat_api* / sse_parser / reply_completer / conversation_context
-                 memory_capture / memory_book / thread_book / return_arc
+                 memory_capture / memory_book / memory_selector
+                 thread_book / creation_book / return_arc
                  bookmark / archive_service* / local_store* / ambient_sound*
                  store_helper / error_helper / tarot_reading
-  widgets/       17 个独立组件（dialogue_box / storybook_frame / shelf_panel /
-                 thread_section / storybook_title / sound_control / candle_glow ...）
+  widgets/       18 个独立组件（dialogue_box / storybook_frame / shelf_panel /
+                 thread_section / creation_section / storybook_title /
+                 sound_control / candle_glow ...）
 scripts/
   build-sites.mjs             Cloudflare 构建
   build-windows-bundle.js     exe 打包（SEA + resedit 图标）
@@ -116,8 +127,9 @@ scripts/
 tool/
   profile_test.dart           用户画像单元测试
   reply_completer_test.dart   截断判定与 SSE 解析测试
-  library_logic_test.dart     存档清洗/未决之事/回归弧/记忆上限/上下文（60 项断言）
+  library_logic_test.dart     存档清洗/未决之事/创作稿/记忆选择/回归弧/上下文
   archive_report.mjs          真实存档体检（指标闭环，见下）
+  scrub_archive.mjs           旧存档清洗（剥掉环境语/回执/报错，产出可导入的 v3）
 test/
   library_session_test.dart   会话行为与持久化（20 项，用内存存储，不碰真实数据）
   page_smoke_test.dart        页面渲染与面板冒烟（7 项，含矮窗口溢出回归）
@@ -162,6 +174,10 @@ flutter test
 # 存档体检（需要一份导出的存档 JSON）
 node tool/archive_report.mjs <存档.json>          # 指标总览
 node tool/archive_report.mjs <存档.json> --full   # 附带对话全文摘要
+
+# 旧存档清洗（把旧版本写进对话流的环境语/回执/报错剥掉，产出可导入的 v3）
+node tool/scrub_archive.mjs <存档.json>           # → <同名>.scrubbed.json
+node tool/scrub_archive.mjs <存档.json> --out clean.json
 ```
 
 > `test/` 里的测试通过 `InMemoryStore` 注入存储，**不会读写本机真实的
@@ -195,8 +211,12 @@ node tool/archive_report.mjs <存档.json> --full   # 附带对话全文摘要
 - idle 定时器 5 分钟，仅触发一次（`_idleDone` 控制），用户发消息会重置计时
 - **回归弧**（`ReturnArc`）：按 lastVisit 计算档位；离开 >1 天且存在新鲜的未决之事时，优先问起那件事（「上次你说的保研还是去海外——后来怎么样了？」）；刚离开 3 小时以内不问候
 - 用户画像：消息 ≥3 条才注入；亲近度 = 天数/轮数四档
-- 记忆整理**一次请求同时产出三样东西**：一条记忆、一件新未决之事、一件旧悬案的"已有下文"回填（拆成两次请求会让成本与延迟翻倍）
+- 记忆整理**一次请求同时产出四样东西**：一条记忆、一件新未决之事、一份来访者的创作稿、一件旧悬案的"已有下文"回填（拆成多次请求会让成本与延迟翻倍）。`max_tokens` 520，比 v2 时代的 400 高，因为 JSON 多了一个字段
+- **记忆注入分两级排序**（`MemorySelector`）：切题的排在前面，切题者之间比相关度，其余按新旧补齐。**刻意不加权求和**——相关度在中文短句上天然只有零点几，而时间权重一上来就接近 1，加权的结果是时间压过一切、等于没做检索。没有话题信号时全部落到第二级，行为退化成"最近优先"。事实与书签**分栏配额**（`kMaxInjectedFacts` = 9 / `kMaxInjectedBookmarks` = 3），书签不再挤占"她到底认不认识这个人"的预算。两栏分成两个 system 块注入，明确告诉模型书签是**他的收藏**、不是对他的描述
+- **反谄媚是注入的回合纪律**（`ConversationContext.antiFlatteryInstruction`），不只是人设措辞：点名"别用承接词起手"和"每轮至少一处真实保留"，这两条正是体检工具在量的特征。两条刹车写在同一条指令里：来访者明显痛苦时不抬杠；不许为反对而反对
+- 来访者的创作稿注入时会明确声明"这是他的东西，不是你的"，并禁止她替他改写或补全
 - 心声选项可折叠，默认关闭（`showQuickOptions` 默认 false）
+- 开场是**两句话**：第一句是氛围，第二句她把手边的游戏与动画碟递出来。第二句刻意不提书（谈书是她最容易编造书名的领域，等作品真值清单落地后再补）
 
 ### 部署（GitHub Pages）
 
@@ -214,11 +234,22 @@ node tool/archive_report.mjs <存档.json> --full   # 附带对话全文摘要
 
 ### 性能优化记录（2026-08-04）
 
-- 总构建体积：99.7MB → **~48MB**
+- 总构建体积：99.7MB → **~48MB**（这是当时的数字，**已经不准了**，见下）
 - 中文字体子集化：LXGWWenKai 25MB→12KB（诗句子集）、NotoSerifSC 24MB→4KB（标题子集）；魔女回复改系统宋体、用户消息系统黑体
 - 魔女立像：PNG 3.5MB → **WebP 124KB**（sharp 压缩）
 - 静态资源 gzip 预压缩（workflow 内自动做）
 - 剩余大头：CanvasKit wasm ~29MB（Flutter 渲染引擎，浏览器缓存后可复用）
+
+> **2026-10-04 实测：干净重建后 `build/web` 是 82MB，不是 48MB。** 构成：
+> CanvasKit 37MB、字体 **34MB**、音景 6.2MB、main.dart.js 2.6MB。
+>
+> 字体这 34MB 几乎全是两个**未子集化**的整字体：`LXGWWenKai-Regular.ttf`（25.5MB）
+> 与 `SimHei.ttf`（9.7MB）。仓库里 `LXGWWenKai-subset.ttf`（12KB）和
+> `NotoSerifSC-subset.ttf`（4KB）**存在但 pubspec 没有引用**——`git log` 里
+> `23e2cd4 "Restore bundled fonts"` 出现在 `7b6881b "Subset Chinese fonts and use
+> system fonts"` 之后，说明"用回整字体"是**有意回退**（子集很可能缺字 fallback）。
+> 所以这不是 bug，但文档里的 48MB 已经过期。要再瘦身，方向是重做子集化并核对
+> 缺字，而不是改回 `-subset.ttf` 了事。
 
 ---
 
@@ -229,34 +260,42 @@ node tool/archive_report.mjs <存档.json> --full   # 附带对话全文摘要
 - 平台差异代码走条件导出（新增平台能力时照 `chat_api` 模式建 stub/web/io 三件套）
 - **会话状态只放 `LibrarySession`；页面不碰存储**。新增状态时先问"它属于会话还是视图"
 - **新增消息类型必须用 `MessageKind`，不要再用字符串嗅探**。历史上靠匹配「书签」+「图书馆」来剔除回执，任何含这些词的真话都会被静默吞掉
-- **单位/上限这类数字只写一处**：记忆 45 字、依据 60 字、记忆上限 32 条、未决之事上限 12 条，都定义在 `lib/config.dart` 或对应 model 里
+- **单位/上限这类数字只写一处**：记忆 45 字、依据 60 字、记忆上限 32 条、未决之事上限 12 条、创作稿 12 份 / 标题 24 字 / 正文 220 字、注入配额 9 + 3，都定义在 `lib/config.dart` 或对应 model 里
 - 纯逻辑优先放在不 import flutter 的支线文件里（`thread_book` / `memory_book` / `return_arc` / `reply_completer`），这样 `dart run` 就能测
 - 需要 widget / ChangeNotifier 的测试放 `test/`，用 `flutter test`；**一律通过 `BeyondTimePage(session: ...)` 注入 `InMemoryStore` 驱动的会话**，绝不让它回落到平台存储（否则会读写你本机真实的 BeyondTime 数据）
 - 写回归测试时先确认它能**在修复前失败**。反例：测"发送后清空输入框"如果没配 API Key，旧代码会走 missingApiKey 分支顺手清空，测试就完全测不出这个 bug
 - 大字文件（>800 行）优先拆分到 `lib/widgets/` 或 `lib/services/`
 - 人设文件 `assets/prompts/ereta_persona.txt` 有备份版本，修改前先备份
 - 测试：`tool/*_test.dart`（零依赖 `dart run`）+ `test/*_test.dart`（`flutter test`），新逻辑照此补充
+- **改完先跑全量**：`dart run tool/library_logic_test.dart` 等三套 + `flutter test`（38 项）+ `flutter analyze`。四套都过才算改完
 
 ### 指标闭环（改人设后怎么知道变好了）
 
 `tool/archive_report.mjs` 把"感觉变好了"变成"数字变好了"。改动人设 / system prompt /
 记忆策略后，导出一份真实存档再跑一遍，重点看：
 
-| 指标 | 期望 | 2026-09-12 基线 |
-|---|---|---|
-| 环境语/回执混入对话流 | 0 条 | 55 条 |
-| 结尾无标点（被截断） | 0 条 | 4/101 |
-| 含转折 / 保留意见 | ≥25% | 10% |
-| 以附和词开头 | ≤15% | 35% |
-| 称呼混用 | 0 条 | 1 条（且整体漂移） |
-| 书签占记忆比例 | 有自己的书架后应下降 | 67%（14/21） |
+| 指标 | 期望 | 2026-09-12 基线 | 2026-09-17 基线 |
+|---|---|---|---|
+| 环境语/回执混入对话流 | 0 条 | 55 条 | 56 条 |
+| 结尾无标点（被截断） | 0 条 | 4/101 | 5/126 (4%) |
+| 含转折 / 保留意见 | ≥25% | 10% | 13% |
+| 以附和词开头 | ≤15% | 35% | 30% |
+| 称呼混用 | 0 条 | 1 条（且整体漂移） | 6 条（您 27% / 你 71%） |
+| 书签占记忆比例 | 有自己的书架后应下降 | 67%（14/21） | 65%（15/23） |
+
+> **注意"环境语/回执混入"这一行**：源码里的序列化过滤是有效的，但如果导出的存档里
+> 仍有几十条噪音，说明**产出该存档的运行版本不是从当前源码构建的**（或它来自一次
+> 早于清洗逻辑的导入）。2026-09-17 的那份存档就是这样：56 条 UI 台词以 `chat`
+> 身份存着，于是全部进了 80 轮上下文窗口——这解释了称呼为什么会从「您」漂到「你」
+> （回归/idle 台词里「你」出现 28 次、「您」0 次）。用 `tool/scrub_archive.mjs`
+> 清洗后再导入，称号漂移的诱因就消失了。
 
 ---
 
 ## 六、当前已知问题 / 注意
 
 1. `beyond_time_page.dart` 已从 1021 行降到 ~615 行，剩余部分基本是纯布局（两套布局 + 标题绘制）。会话逻辑若再增长，请放进 `LibrarySession` 而不是页面
-2. **记忆相关性检索与书签注入配额仍未做**（见第二节待办）。书架只解决了"归宿"，没解决"注入预算"
+2. **记忆相关性检索与书签注入配额已做**（2026-10-04，`memory_selector.dart`）。但"相关度"只是字符二元组覆盖率，没有中文分词、也没有向量检索；切题门槛 `topicThreshold = 0.08` 是为了把"碰巧几个字重合"和"真的在说同一件事"分开，**尚未用真实存档验证过效果**
 3. 桌面版定位是"附带产物"，主要形态建议走 Web/PWA
 4. `assets/sounds/` 的 OGG 来自 GitHub Muges/ambientsounds（CC0/CC BY），fireplace 与 wind 听感曾相似，已换为当前版本
 5. 中文字体是**子集化**的：改动标题/诗句文字后必须重跑 `node scripts/subset-fonts.js`，否则新字缺失会 fallback 到系统字体
@@ -264,9 +303,38 @@ node tool/archive_report.mjs <存档.json> --full   # 附带对话全文摘要
 7. 本地构建**不要**带 `--base-href`（会覆盖本地产物为 GitHub Pages 路径）；GitHub Pages 的 base-href 由 CI 单独构建
 8. 打包 exe 依赖 npm 包 `@yao-pkg/pkg` + `resedit`，若 `node_modules` 被清需先 `npm install`
 9. 对话输入框当前为单行固定高度（58px）。曾尝试 `TextField maxLines: 4` 自动换行，但因外层 Column 给非弹性子项无限高度约束，Composer 被撑满整页，已回退；多行输入待另寻方案
-10. `conversation_context.dart` 的 `cleanReply` 会删掉**所有**中英文括号内容与 `“”`。人设已要求不用括号动作描写，但这是把无差别手术刀——任何合法的括号信息（年份、英文原名）都会消失。若日后发现内容无故缺失，先查这里
-11. 旧存档（v1）导入时会做一次精确匹配清洗：丢弃已知的 idle/离馆/回归台词、书签回执、API Key 提示，并折叠相邻完全相同的台词。只做精确匹配，不做模糊判断，以免误删她真的说过的话
-12. 侧栏面板（设置/记忆/书架/存档）宽度固定 460/440；设置面板已改为「页眉固定 + 中段可滚动 + 底部按钮固定」，在 1280x600 这类矮窗口不会再溢出（有回归测试兜底）
+10. `conversation_context.dart` 的 `cleanReply` 会删掉**所有**中英文括号内容与 `“”`。人设已要求不用括号动作描写，但这是把无差别手术刀——任何合法的括号信息（年份、英文原名）都会消失。若日后发现内容无故缺失，先查这里。**这条和"谈书幻觉"是同一个坑**：想让"《书名》（原作者）"这类自保格式兜底，会先被这一行剥掉，所以做作品真值清单之前必须先处理它
+11. 旧存档（v1/v2）导入时会做一次清洗：丢弃已知的 idle/离馆/回归台词、书签回执、API Key 提示，**以及以"连接没有成功"开头的动态报错**（精确匹配装不下带尾巴的报错，所以走前缀），并折叠相邻完全相同的台词。只做精确与前缀匹配，不做模糊判断，以免误删她真的说过的话
+12. 侧栏面板（设置/记忆/书架/存档）宽度固定 460/440。设置面板与**存档面板**都是「页眉固定 + 中段可滚动 + 底部按钮固定」，在 1280x600 这类矮窗口不会再溢出（各有回归测试兜底）。存档面板本来是固定 Column，v3 加了「你写下的东西」计数后实测溢出 23px，才改成现在的结构
 13. `pubspec.yaml` 的 `dev_dependencies` 里有 `flutter_test`（SDK 自带，不是第三方依赖），README 的 "zero-dep" 徽章依然成立
 14. 发送后**必须在 `await` 之前清空输入框**。重构时曾漏掉这一步，导致"发出去的话留在文本框里"（只有未填 API Key 的分支才清）。两条回归测试覆盖了发送按钮与回车两条路径
 15. 页面支持 `BeyondTimePage(session: ...)` 注入会话，仅供测试。注入的会话由调用方负责销毁，且要**先卸载页面再 dispose**（顺序反了会在 `removeListener` 上抛断言）
+16. `assets/prompts/ereta_persona.txt` 开头带一个 **UTF-8 BOM**（`EF BB BF`），会原样作为 system prompt 的首字符发出去。无实际危害，但改这个文件时容易把它一起动掉
+17. `LibraryArchive` 的 `creations` 是**可选**参数（默认空列表）：这样 v2 存档与既有调用点都能继续编译。存档版本已升到 v3，导入导出测试断言的是 `LibraryArchive.currentVersion` 而不是字面量 3
+18. 创作稿面板目前**只读**，没有删除/编辑入口，和「还悬着的事」保持一致。要加的话记得：来访者的字不该被一个手滑的删除键带走，删除至少要有二次确认
+19. `CreationBook.isSimilarTitle` 直接复用 `ThreadBook.isSimilarTopic`（包含判断 + 二元组 Jaccard），**不要另写一套相似度**：两套算法迟早会漂移，而且"标题像不像"和"话题像不像"是同一个问题
+
+---
+
+## 七、作品真值：谈书为什么崩，以及唯一的解法（尚未实施）
+
+**现象**（用户实测）：谈游戏与动画效果很好，谈书则幻觉严重——她无法把书名和现实中的书对应上。
+
+**机制诊断**（按嫌疑排序）：
+
+1. **`temperature: 1.35`**（`library_session.dart`）。游戏/动画的谈论只需要"气质对不对"——叙事结构、演出、角色关系，采样偏了也依然成立；书需要的是**标题↔作者↔论点**这种低频精确映射，温度一高必然拼错。同一个参数给了她声音，也毁了她的书目可信度。记忆整理走 `0.15`，说明低温才准这件事项目里本来就知道
+2. **人设第 30 行的自我检查是无效指令**。模型没有可靠的"我到底知不知道"信号；失败模式不是犹豫而是**流畅地编**
+3. **`cleanReply` 会剥掉括号**（见第六节第 10 条），所以她连"《书名》（原作者）"这种自保格式都留不下
+4. **仓库里没有任何书目真值**。游戏/动画靠模型先验勉强撑住，书没有底
+
+**解法（推荐）——给她一个真实书架（封闭集引用）**：
+
+- 新增 `lib/data/ereta_shelf.dart`：几十部真实作品，每条 `{标题, 作者/厂牌, 类型, 她为什么偏爱它}`
+- 注入一条 system：这是你书架上**确实存在**的书，只许从这份清单里报书名；清单外的一律说"这本我还没翻过"或只谈品类/气质
+- 把**开放域回忆**换成**闭集选择**，这是提示词层面唯一可靠的抗幻觉手段
+- 取舍要明确：它和人设"不要把人设绑定到固定书单"**冲突**，需要有意推翻那一句。理由——一份私人口味书架不是"背诵固定书单"，它是边界；而且它能让她的品味第一次变得稳定（现在她其实没有可辨认的口味，只有即兴发挥）
+- 落地前必须先处理 `cleanReply`，否则作者名会被剥掉
+
+**补充手段**：把书谈做成**访谈而非独白**（"拿来给我看看"）。让访客提供事实，她只负责反应与判断——零幻觉，而且正是馆主的姿态。存档里唯一一次没崩的书目对话（《自伤自恋的精神分析》）就是访客带来的。
+
+**开场提示的配比**因此与真值绑定：**书架清单落地之前，开场只提游戏与动画**。

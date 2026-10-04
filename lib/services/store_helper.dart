@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../config.dart';
 import '../models/api_settings.dart';
 import '../models/chat_message.dart';
+import '../models/creation_note.dart';
 import '../models/library_memory_item.dart';
 import '../models/open_thread.dart';
 import '../models/user_profile.dart';
@@ -183,6 +184,32 @@ class StoreHelper {
 
   void deleteOpenThreads() {
     _store.delete(kOpenThreadsKey);
+  }
+
+  List<CreationNote> loadCreations() {
+    final raw = _store.read(kCreationsKey);
+    if (raw == null) return const [];
+    try {
+      final data = jsonDecode(raw) as List<dynamic>;
+      return data
+          .whereType<Map<String, dynamic>>()
+          .map(CreationNote.tryFromJson)
+          .whereType<CreationNote>()
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  void saveCreations(List<CreationNote> creations) {
+    _store.write(
+      kCreationsKey,
+      jsonEncode(creations.map((note) => note.toJson()).toList()),
+    );
+  }
+
+  void deleteCreations() {
+    _store.delete(kCreationsKey);
   }
 
   void deleteQuickOptionPoolIndex() {

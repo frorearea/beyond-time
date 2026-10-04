@@ -10,6 +10,7 @@ import '../data/quick_options.dart';
 import '../data/return_lines.dart';
 import '../models/api_settings.dart';
 import '../models/chat_message.dart';
+import '../models/creation_note.dart';
 import '../models/library_archive.dart';
 import '../models/library_memory_item.dart';
 import '../models/open_thread.dart';
@@ -17,6 +18,7 @@ import '../models/user_profile.dart';
 import 'bookmark_service.dart';
 import 'chat_api.dart';
 import 'conversation_context.dart';
+import 'creation_book.dart';
 import 'error_helper.dart';
 import 'memory_book.dart';
 import 'memory_capture_service.dart';
@@ -58,6 +60,7 @@ class LibrarySession extends ChangeNotifier {
     ConversationContext conversationContext = const ConversationContext(),
     BookmarkService bookmarkService = const BookmarkService(),
     ThreadBook threadBook = const ThreadBook(),
+    CreationBook creationBook = const CreationBook(),
     MemoryBook memoryBook = const MemoryBook(),
     ReturnArc returnArc = const ReturnArc(),
   })  : _storeHelper = storeHelper ?? StoreHelper.platform(),
@@ -65,6 +68,7 @@ class LibrarySession extends ChangeNotifier {
         _conversationContext = conversationContext,
         _bookmarkService = bookmarkService,
         _threadBook = threadBook,
+        _creationBook = creationBook,
         _memoryBook = memoryBook,
         _returnArc = returnArc {
     _memoryCaptureService = MemoryCaptureService(_chatApi);
@@ -77,6 +81,7 @@ class LibrarySession extends ChangeNotifier {
   final ConversationContext _conversationContext;
   final BookmarkService _bookmarkService;
   final ThreadBook _threadBook;
+  final CreationBook _creationBook;
   final MemoryBook _memoryBook;
   final ReturnArc _returnArc;
   late final MemoryCaptureService _memoryCaptureService;
@@ -84,11 +89,20 @@ class LibrarySession extends ChangeNotifier {
 
   static const List<ChatMessage> _openingMessages = [
     ChatMessage(role: 'assistant', content: '进来吧。这里暂时只有黑暗、我、还有你可以慢慢放下的声音。'),
+    // 第二句是她"把手边的东西递出来"：新访客常常不知道从哪儿开口，而
+    // "聊聊喜欢的作品"是这个空间里门槛最低、也最不需要理由的入口。
+    // 刻意不提书——谈书是她最容易编造书名的地方，等书架真值落地后再补。
+    ChatMessage(
+      role: 'assistant',
+      content: '我手边刚放下一部打到一半的游戏，和一张没收起来的动画碟。'
+          '你要是不知道从哪儿开口，可以从这儿开始。',
+    ),
   ];
 
   List<ChatMessage> _messages = _openingMessages;
   List<LibraryMemoryItem> _memories = const [];
   List<OpenThread> _threads = const [];
+  List<CreationNote> _creations = const [];
   UserProfile _profile = UserProfile();
   ApiSettings _apiSettings = const ApiSettings();
   String _persona = kFallbackPersona;
@@ -111,6 +125,7 @@ class LibrarySession extends ChangeNotifier {
   List<ChatMessage> get messages => List.unmodifiable(_messages);
   List<LibraryMemoryItem> get memories => List.unmodifiable(_memories);
   List<OpenThread> get threads => List.unmodifiable(_threads);
+  List<CreationNote> get creations => List.unmodifiable(_creations);
   UserProfile get profile => _profile;
   ApiSettings get apiSettings => _apiSettings;
   String get persona => _persona;
@@ -133,6 +148,9 @@ class LibrarySession extends ChangeNotifier {
 
   List<OpenThread> get resolvedThreads =>
       _threadBook.sorted(_threads).where((thread) => !thread.isOpen).toList();
+
+  /// 来访者自己留在这里的创作稿，最近碰过的排前面。
+  List<CreationNote> get sortedCreations => _creationBook.sorted(_creations);
 
   List<String> get quickOptions =>
       kQuickOptionPools[_quickOptionPoolIndex % kQuickOptionPools.length];
@@ -186,6 +204,7 @@ class LibrarySession extends ChangeNotifier {
     _messages = _storeHelper.loadHistory() ?? _openingMessages;
     _memories = _storeHelper.loadLibraryMemory();
     _threads = _storeHelper.loadOpenThreads();
+    _creations = _storeHelper.loadCreations();
     _profile = _storeHelper.loadUserProfile() ?? UserProfile();
     _profile.touch();
     _storeHelper.saveUserProfile(_profile);
@@ -320,6 +339,7 @@ class LibrarySession extends ChangeNotifier {
         messages: _messages,
         memories: _memories,
         threads: _threads,
+        creations: _creations,
         userProfile: _profile,
         extraSystemInstruction: extraSystemInstruction,
       ),
@@ -369,6 +389,7 @@ class LibrarySession extends ChangeNotifier {
         assistantReply: assistantReply,
         existingMemories: _memories,
         existingThreads: _threads,
+        existingCreations: _creations,
         apiKey: _apiSettings.apiKey.trim(),
         apiUrl: _apiSettings.resolvedApiUrl,
         model: _apiSettings.resolvedModel,
@@ -401,6 +422,16 @@ class LibrarySession extends ChangeNotifier {
         changed = true;
       }
 
+      if (outcome.creation != null) {
+        final creations = _creationBook.merge(_creations, outcome.creation!,
+            now: nowProvider());
+        if (!identical(creations, _creations)) {
+          _creations = creations;
+          _storeHelper.saveCreations(_creations);
+          changed = true;
+        }
+      }
+
       if (changed) _notify();
       _memoryCaptureCooldown = 2;
     } catch (_) {
@@ -415,6 +446,14 @@ class LibrarySession extends ChangeNotifier {
   void mergeThreadForTest(OpenThreadDraft draft) {
     _threads = _threadBook.merge(_threads, draft, now: nowProvider());
     _storeHelper.saveOpenThreads(_threads);
+    _notify();
+  }
+
+  /// 把一份创作稿直接送入簿记（测试与手工修复用）。
+  @visibleForTesting
+  void mergeCreationForTest(CreationDraft draft) {
+    _creations = _creationBook.merge(_creations, draft, now: nowProvider());
+    _storeHelper.saveCreations(_creations);
     _notify();
   }
 
@@ -483,6 +522,7 @@ class LibrarySession extends ChangeNotifier {
       messages: _messages,
       memories: _memories,
       threads: _threads,
+      creations: _creations,
       quickOptionPoolIndex: _quickOptionPoolIndex,
     ).toJsonText();
   }
@@ -494,10 +534,12 @@ class LibrarySession extends ChangeNotifier {
     _messages = archive.messages;
     _memories = archive.memories;
     _threads = archive.threads;
+    _creations = archive.creations;
     _quickOptionPoolIndex = archive.quickOptionPoolIndex;
     _persistHistory();
     _storeHelper.saveLibraryMemory(_memories);
     _storeHelper.saveOpenThreads(_threads);
+    _storeHelper.saveCreations(_creations);
     _storeHelper.saveQuickOptionPoolIndex(_quickOptionPoolIndex);
     _notify();
     return ImportStatus.ok;
@@ -523,10 +565,12 @@ class LibrarySession extends ChangeNotifier {
     ];
     _memories = const [];
     _threads = const [];
+    _creations = const [];
     _quickOptionPoolIndex = 0;
     _storeHelper.deleteHistory();
     _storeHelper.deleteLibraryMemory();
     _storeHelper.deleteOpenThreads();
+    _storeHelper.deleteCreations();
     _storeHelper.deleteQuickOptionPoolIndex();
     _storeHelper.saveLastVisit(nowProvider().toIso8601String());
     _idleDone = false;
