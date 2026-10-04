@@ -204,9 +204,9 @@ node tool/scrub_archive.mjs <存档.json> --out clean.json
 
 - API 配置存 localStorage（`beyondTimeFlutterSettings`）；`server.js` 本地代理 `/api/chat`
 - 线上环境（GitHub Pages 等）仅 localhost 走 `/api/chat` 代理，其余直连 API；Cloudflare 域名（`.workers.dev`/`.pages.dev`）也走代理（见 `chat_api_web.dart` 的 hostname 判断）
-- **消息种类**（`MessageKind`）：`chat` 才入存档与上下文；`ambient`（环境语）、`notice`（书签回执、API Key 提示）、`error`（连接失败）只在界面显示
-  - ⚠️ **已知不一致**：文档一直说这三种"界面压暗以示不是她的话"，但 `message_view.dart` 的 `isSystemLine` **只覆盖 `notice` 与 `error`**，`ambient` 是以跟她真话同样的亮度和字号渲染的（`ChatMessage.isAmbient` 那个 getter 现在没有任何调用点，是重构时留下的痕迹）。两种读法都有道理——idle 台词确实是"她在说话"，而 notice/error 是系统回执——**需要你定**：要么让 ambient 也压暗（合文档），要么改文档（承认环境语也算她的话）
-- **回归问候是"一次性"的，不留在历史里**：`_applyReturnGreeting` 把它作为 `ambient` 插入，而 `_persistHistory()` 只写 `chat`，所以刷新之后就看不到了（除非档位仍然成立，比如没发消息）。这是设计如此：环境语本来就不该进历史。**2026-10-04 之前看起来"有记录"，是因为老版本把环境语当 `chat` 存进了 localStorage**，那正是被清洗掉的那 46 条。如果希望"每次回来的问候都留个痕迹"，那是另一个功能，需要单独设计（见第六节第 23 条）
+- **消息种类**（`MessageKind`）：`chat` 才入存档与上下文；`ambient`（环境语：idle 台词、回归问候）、`notice`（书签回执、API Key 提示）、`error`（连接失败）的归宿都只是界面
+  - **渲染口径（2026-10-04 定）**：只有 `notice` / `error` 压暗缩小——它们是系统回执，不是她说的话。**`ambient` 不压暗**：idle 台词与回归问候本来就是"她在说话"，以跟她真话相同的亮度与字号呈现。文档以前写的是"三种都压暗"，与 `message_view.dart` 的实现不符，已按实现改正；重构时留下的死代码 `ChatMessage.isAmbient` 也一并删掉了
+- **回归问候是"一次性"的，不留在历史里**（2026-10-04 确认保持这个设计）：`_applyReturnGreeting` 把它作为 `ambient` 插入，而 `_persistHistory()` 只写 `chat`，所以刷新之后就不在了（除非档位仍然成立，比如回来还没说话）。**2026-10-04 之前看起来"有记录"，是因为老版本把环境语当 `chat` 存进了 localStorage**——那正是被清洗掉的那 46 条。如果哪天想要"每次回来的问候都留个痕迹"，那需要给 `ambient` 单独开一条"界面可见、不写存档、不进上下文"的通道，不要图省事把它变成 `chat`（那会重新污染 80 轮上下文窗口，并影响她的称呼与口癖）
 - 环境语**页面同时至多一条**，且**不写入存档**
 - `max_tokens` 默认 1000（`kDefaultMaxTokens`）。**不能调小**：同时开启 thinking 时思维链会吃掉预算，520 曾导致 101 条回复里有 4 条被切断在句子中间
 - 截断判定用流式响应里的 `finish_reason == 'length'`（权威信号），缺失时才回落到"结尾无标点"启发式；命中后自动续写一次
@@ -372,7 +372,11 @@ node tool/scrub_archive.mjs <存档.json> --out clean.json
 21. `return_lines.dart` / `idle_lines.dart` 里的环境台词**统一用「你」，而人设统一用「您」**（「你」28 次、「您」0 次）。这些台词本来不进上下文（是 `ambient`），所以以前没暴露；但一旦有噪音漏进历史，它们就会把称呼带跑偏。如果以后决定统一口径，改这里的时候两处要一起改
 22. **人设文件不要用规则清单写性格**。`ereta_persona.txt` 里正面气质是用她自己的口吻写的（"她最受不了自己变成……的人"），而不是"每次回复必须……"。2026-10-04 的教训见第五节末：规则清单会被模型当成每轮要满足的 checklist
 23. **开场第二句只有"真正首次进入"才看得到**：`_messages = loadHistory() ?? _openingMessages`，所以只要 localStorage 里有历史就用不到它。试过让 `clearChat` 也回到开场，被否掉了（见第四节"运行时行为"）。**要改这个行为之前先想清楚**：三个候选方案各有代价——(a) 清空回到开场（=把"重新开始"和"首次进来"混为一谈，已否）；(b) 把它做成一条 idle/环境语（但环境语同时至多一条，且不写存档）；(c) 不做，接受它只对新访客生效。目前是 (c)
-24. **回归弧在"有历史"时的行为直到 2026-10-04 才被测试覆盖**。此前 `test/library_session_test.dart` 的回归弧用例都只 seed `lastVisit` / `openThreads`、**不 seed 历史**，于是 `_messages` 落到 `_openingMessages`——"已经有对话记录时问候还进不进得来"这条路是空的。补过之后确认：有历史时三天档、四小时档都照常插入 `ambient` 问候，一小时档不问候。**怀疑回归弧出问题时，先看那两条新用例**，再用 `tool/archive_report.mjs` 确认存档里的环境语是不是被当成噪音清掉了（那是正常的：环境语本来就不该进历史）
+24. **回归弧在"有历史"时的行为直到 2026-10-04 才被测试覆盖**。此前 `test/library_session_test.dart` 的回归弧用例都只 seed `lastVisit` / `openThreads`、**不 seed 历史**，于是 `_messages` 落到 `_openingMessages`——"已经有对话记录时问候还进不进得来"这条路是空的。补过之后确认：有历史时三天档、四小时档都照常插入 `ambient` 问候，一小时档不问候。**怀疑回归弧出问题时，按这个顺序查**：
+    1. 先看那两条新用例（有历史 + 三天 / 一小时）是否还过
+    2. 再确认你是在看**历史记录**还是在看**回来的那一刻**。问候是一次性的，不进历史；看起来"有记录"的旧数据是被清掉的那批污染
+    3. 最后用 `tool/archive_report.mjs` 确认存档里的环境语是不是被当噪音清了（那是正常的）
+    4. 注意 `clearChat` / `resetEverything` 都会把 `lastVisit` 置为当下，所以**清空之后三小时内不会再有回归问候**——这不是 bug，是档位没到
 
 ---
 

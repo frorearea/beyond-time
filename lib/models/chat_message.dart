@@ -45,9 +45,6 @@ class ChatMessage {
 
   bool get isChat => kind == MessageKind.chat;
 
-  /// 向后兼容的读取口：等价于 `kind == MessageKind.chat`。
-  bool get isAmbient => kind == MessageKind.ambient;
-
   ChatMessage copyWith({String? content, MessageKind? kind}) {
     return ChatMessage(
       role: role,
