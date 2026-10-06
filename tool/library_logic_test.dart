@@ -657,6 +657,20 @@ void main() {
   check('说话指令禁止为显得独立而硬造异议',
       ConversationContext.characterVoiceInstruction.contains('硬造异议'));
 
+  // 2026-10-04：她主动收尾的倾向（「今晚到这儿就可以了，去睡吧」）被明确否掉。
+  // 这不只是语气问题——替访客规定"什么时候该休息、什么时候该走"正是本项目反对的规训。
+  check('说话指令禁止主动结束对话',
+      ConversationContext.characterVoiceInstruction.contains('不要主动结束对话'));
+  check('说话指令禁止替访客决定什么时候走',
+      ConversationContext.characterVoiceInstruction
+          .contains('替访客决定什么时候走'));
+  check('说话指令里的"不必用问题收尾"没有单独出现（否则会滑向总结式收场）',
+      ConversationContext.characterVoiceInstruction.contains('不必每轮都用问题收尾') &&
+          ConversationContext.characterVoiceInstruction
+              .contains('不要因此改用总结替他收场'));
+  check('危机时的指引没有说成"今天到此为止"',
+      ConversationContext.characterVoiceInstruction.contains('接着听'));
+
   // 回归防护（2026-10-04 的教训）：不要再给人格设"每轮至少一处异议"这种配额，
   // 也不要在指令里点名具体的转折词。这两件事会立刻变成口癖——存档里出现了
   // 「不过我得说句不客气的 / 提个醒 / 挑一句 / 泼一点凉水」四种近乎相同的说法。
@@ -684,6 +698,24 @@ void main() {
       !factBlock['content']!.contains('不断改价的柜台'));
   check('书签块说明那是收藏而不是对他的描述',
       bookmarkBlock['content']!.contains('不是对他的描述'));
+
+  // ------------------------------------------------------------ 人设文本
+  section('人设（assets/prompts/ereta_persona.txt）');
+  final personaFile = File('assets/prompts/ereta_persona.txt');
+  if (!personaFile.existsSync()) {
+    print('SKIP: 找不到人设文件（仓库根目录运行本测试）');
+  } else {
+    final persona = personaFile.readAsStringSync();
+    check('人设写明图书馆没有关门时间', persona.contains('图书馆没有关门时间'));
+    check('人设点名她不说"去睡吧"这类话', persona.contains('去睡吧'));
+    check('人设把"不替访客定作息"接到项目主旨上',
+        persona.contains('全是别人替他定的'));
+    check('人设保留了"你回来说，我接着听"的姿态', persona.contains('我接着听'));
+    check('人设没有把收尾句当成正面示范',
+        !persona.contains('今晚到这儿就可以了'));
+    check('人设仍写着"她享受聪明"（正面气质没有被规则挤掉）',
+        persona.contains('她聪明，而且享受聪明'));
+  }
 
   // ------------------------------------------------------------ 收尾
   print('');
