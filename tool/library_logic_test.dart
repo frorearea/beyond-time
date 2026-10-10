@@ -652,10 +652,19 @@ void main() {
   check('性格说话方式被注入',
       context.any(
           (m) => m['content'] == ConversationContext.characterVoiceInstruction));
-  check('说话指令写明"看得准比唱反调重要"',
-      ConversationContext.characterVoiceInstruction.contains('看得准'));
+  check('说话指令以身份开头（魔女不是评论员）',
+      ConversationContext.characterVoiceInstruction.contains('魔女，不是评论员'));
+  check('说话指令要求用看见的东西说话、不要用判断说话',
+      ConversationContext.characterVoiceInstruction.contains('不要用判断说话'));
+  check('说话指令禁止把自己压成直白简单的结论',
+      ConversationContext.characterVoiceInstruction.contains('直白、简单'));
   check('说话指令禁止为显得独立而硬造异议',
       ConversationContext.characterVoiceInstruction.contains('硬造异议'));
+  check('说话指令也禁止为好看硬凑意象（分寸不等于配额）',
+      ConversationContext.characterVoiceInstruction.contains('硬凑意象'));
+  // 人设与指令里出现 Markdown 加粗，她会跟着在回复里吐星号（她被要求不输出任何标记）。
+  check('注入指令里没有 Markdown 标记',
+      !ConversationContext.characterVoiceInstruction.contains('**'));
 
   // 2026-10-04：她主动收尾的倾向（「今晚到这儿就可以了，去睡吧」）被明确否掉。
   // 这不只是语气问题——替访客规定"什么时候该休息、什么时候该走"正是本项目反对的规训。
@@ -715,6 +724,27 @@ void main() {
         !persona.contains('今晚到这儿就可以了'));
     check('人设仍写着"她享受聪明"（正面气质没有被规则挤掉）',
         persona.contains('她聪明，而且享受聪明'));
+
+    // 2026-10-11 语域事故：她的意象掉了三成、碎句翻倍。修法是强化身份与人设，
+    // **不是给比喻设配额**（那正是"给人格设指标"的老坑）。
+    check('人设有"她的声音"专节（身份优先于规则）',
+        persona.contains('她的声音'));
+    check('人设写明比喻是她思考的样子，不是装饰',
+        persona.contains('她的比喻不是装饰'));
+    check('人设禁止用空词加重语气',
+        persona.contains('特别') && persona.contains('空词'));
+    check('人设有正例', persona.contains('随时可以被更新的简历'));
+    check('人设有反例（太直白、太平、太像客服）',
+        persona.contains('她不要的样子') && persona.contains('太像客服'));
+    check('人设明确要求不要把自己压扁成直白判断',
+        persona.contains('不要在回复里把自己压扁'));
+    check('人设不再给比喻设"最多一个"的数量上限',
+        !persona.contains('最多使用一个核心比喻'));
+    check('人设不再因 thinking 而要求压短出口',
+        !persona.contains('180 到 260') &&
+            persona.contains('不要因为系统开了 thinking 就把自己压短'));
+    check('人设里没有 Markdown 标记（否则她会跟着吐星号）',
+        !persona.contains('**'));
   }
 
   // ------------------------------------------------------------ 收尾

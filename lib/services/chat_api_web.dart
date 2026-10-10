@@ -85,7 +85,12 @@ class ChatApiClient {
         onReply(reply);
       }
       reportReason();
-      completer.complete(reply.isEmpty ? '模型没有返回内容。' : reply);
+      // 原样返回，**不在这里编造"模型没有返回内容。"**：
+      // 流为空是需要上层判断的语义（可能是思维链吃光了预算、应当重试），
+      // 不是一句可以当成"她说过的话"的字符串。曾经在这里塞了兜底文案，
+      // 结果被 ReplyCompleter 当成她的半截回复写进续写请求，落进存档之后
+      // 她的原话字面上以「模型没有返回内容。」开头（2026-10-11 存档里 3 处）。
+      completer.complete(reply);
     });
 
     request.onError.listen((_) {

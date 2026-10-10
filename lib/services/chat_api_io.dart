@@ -60,7 +60,8 @@ class ChatApiClient {
       }
       reportReason();
 
-      return reply.isEmpty ? '模型没有返回内容。' : reply;
+      // 与 chat_api_web.dart 同理：原样返回，不在这里编造兜底文案。
+      return reply;
     } finally {
       client.close(force: true);
     }

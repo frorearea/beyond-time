@@ -181,6 +181,64 @@ for (const [phrase, n] of tics) {
   console.log(`  x${n} ${phrase}${echo}`);
 }
 if (tics.length === 0) console.log('  ✅ 没有明显的口头禅');
+
+// 语域漂移：意象变少、句子变碎。
+//
+// 2026-10-11 的来访者反馈是"用语不如从前优雅、直白简单、比喻没了"。当时**按整份存档
+// 比较看不出来**（两份存档大部分是同一段带过来的老历史，把变化抹平了），必须在**同一份
+// 存档内部按时间切开**才看得见：意象词 2.53/千字 → 1.74，≤8 字碎句 6.7% → 12.8%，
+// 句长中位 25 → 21。
+//
+// 所以这里同时给两个读数：全档，以及"最早四分之一 vs 最新四分之一"的对比。
+// **仍然只是诊断，不设目标**——她是靠身份与气质写出来的，不是靠凑意象密度凑出来的。
+const IMAGERY = /(像|仿佛|如同|宛如|犹如)/g;
+const measureVoice = (seg) => {
+  const chars = seg.reduce((a, m) => a + m.content.length, 0) || 1;
+  let sentences = 0;
+  let short = 0;
+  const lens = [];
+  for (const m of seg) {
+    for (const para of m.content.split('\n')) {
+      for (const raw of para.split(/[。！？…]/)) {
+        const s = raw.trim();
+        if (s.length < 2) continue;
+        sentences += 1;
+        lens.push(s.length);
+        if (s.length <= 8) short += 1;
+      }
+    }
+  }
+  lens.sort((a, b) => a - b);
+  return {
+    imagery:
+      ((seg.map((m) => m.content).join('').match(IMAGERY) ?? []).length / chars) *
+      1000,
+    shortRatio: sentences ? (short / sentences) * 100 : 0,
+    medianSentence: lens.length ? lens[Math.floor(lens.length / 2)] : 0,
+  };
+};
+const quarter = Math.max(1, Math.floor(real.length / 4));
+const early = real.slice(0, quarter);
+const late = real.slice(-quarter);
+const allVoice = measureVoice(real);
+const earlyVoice = measureVoice(early);
+const lateVoice = measureVoice(late);
+console.log('\n语域（诊断读数，不设目标）：');
+console.log(
+  `  全档　　意象 ${allVoice.imagery.toFixed(2)}/千字　≤8字碎句 ${allVoice.shortRatio.toFixed(1)}%　句长中位 ${allVoice.medianSentence}`,
+);
+console.log(
+  `  最早 1/4　意象 ${earlyVoice.imagery.toFixed(2)}/千字　≤8字碎句 ${earlyVoice.shortRatio.toFixed(1)}%　句长中位 ${earlyVoice.medianSentence}`,
+);
+console.log(
+  `  最新 1/4　意象 ${lateVoice.imagery.toFixed(2)}/千字　≤8字碎句 ${lateVoice.shortRatio.toFixed(1)}%　句长中位 ${lateVoice.medianSentence}`,
+);
+if (earlyVoice.imagery > 0 && lateVoice.imagery < earlyVoice.imagery * 0.8) {
+  console.log('  ⚠️ 意象密度比开头低了 20% 以上：去查人设里是不是有人在削弱她的意象');
+}
+if (lateVoice.shortRatio > earlyVoice.shortRatio * 1.6) {
+  console.log('  ⚠️ 碎句比例比开头高了 60% 以上：她可能正在变得直白');
+}
 console.log(`\n（异议条数 ${real.filter(hasDissent).length} 条仅作记录；异议该由判断决定，不该由指标决定）`);
 
 line('5. 记忆与未决之事');

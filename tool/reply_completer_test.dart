@@ -77,6 +77,55 @@ void main() {
   // ---------- 3. token 预算 ----------
   print('=== token 预算 ===');
   check('默认上限已从 520 提升', kDefaultMaxTokens >= 900);
+  check('默认上限已提到 1600（思维链偶尔会吃光 1000）', kDefaultMaxTokens >= 1500);
+
+  // ---------- 4. 重试请求的组装（2026-10-11 空回复事故）----------
+  //
+  // 事故链：思维链把 max_tokens 全吃光 → 流里一个字都没有、
+  // finish_reason=length → chat_api 那时会返回兜底文案「模型没有返回内容。」
+  // → ReplyCompleter 把这句话当成她的半截回复写进续写请求 →
+  // 模型顺着它往下写 → 存档里她的原话字面上以那句话开头（3 处）。
+  print('=== 重试请求的组装 ===');
+  final base = <Map<String, dynamic>>[
+    {'role': 'system', 'content': '人设'},
+    {'role': 'user', 'content': '我说的话'},
+  ];
+
+  final withPartial = ReplyCompleter.buildRetryMessages(
+    baseMessages: base,
+    partial: '给故事一个重要名字，它才会在您的记忆',
+  );
+  check('有半截正文时保留她已写的内容',
+      withPartial.any((m) => m['role'] == 'assistant' && m['content'] == '给故事一个重要名字，它才会在您的记忆'));
+  check('有半截正文时用"接着写"指令',
+      withPartial.last['content'] == kContinuationInstruction);
+
+  final emptyPartial = ReplyCompleter.buildRetryMessages(
+    baseMessages: base,
+    partial: '',
+  );
+  check('没有正文时不注入空的 assistant 轮次',
+      !emptyPartial.any((m) => m['role'] == 'assistant'));
+  check('没有正文时用"重试"指令而不是"接着写"',
+      emptyPartial.last['content'] == kEmptyReplyRetryInstruction);
+  check('重试指令不说"接着写"（根本没有中断处）',
+      !kEmptyReplyRetryInstruction.contains('接着'));
+  check('重试指令要求直接从正文开始',
+      kEmptyReplyRetryInstruction.contains('直接从正文开始'));
+  check('空串绝不会进入任何一条消息',
+      emptyPartial.every((m) => (m['content'] as String).trim().isNotEmpty));
+
+  final whitespacePartial = ReplyCompleter.buildRetryMessages(
+    baseMessages: base,
+    partial: '   \n  ',
+  );
+  check('只有空白也算没有正文',
+      !whitespacePartial.any((m) => m['role'] == 'assistant'));
+
+  // 兜底文案必须走 error 种类，不能伪装成她的台词（这里只锁住文案本身；
+  // 种类隔离由 test/library_session_test.dart 覆盖）。
+  check('空回复的提示不是一句"她会说的话"',
+      !kEmptyReplyNotice.contains('模型') && kEmptyReplyNotice.contains('再说一次'));
 
   print('');
   if (_failures == 0) {

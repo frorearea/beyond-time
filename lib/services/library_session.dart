@@ -303,11 +303,21 @@ class LibrarySession extends ChangeNotifier {
     _notify();
 
     try {
-      final reply = await _requestReply(
+      final result = await _requestReply(
         extraSystemInstruction: extraSystemInstruction,
         maxTokens: maxTokens,
       );
       if (_disposed) return const SendOutcome(SendStatus.ok);
+      if (result.text.trim().isEmpty) {
+        // 一个字都没拿到（多半是思维链把预算吃光后重试仍然失败）。
+        // 这**不是她的话**，所以走 error 种类：界面会压暗，也不会进存档与上下文。
+        _replaceLastAssistant(kEmptyReplyNotice, kind: MessageKind.error);
+        _isSending = false;
+        _notify();
+        _startIdleTimer();
+        return const SendOutcome(SendStatus.failed, message: kEmptyReplyNotice);
+      }
+      final reply = result.text;
       _replaceLastAssistant(_conversationContext.cleanReply(reply));
       _isSending = false;
       _persistHistory();
@@ -328,7 +338,7 @@ class LibrarySession extends ChangeNotifier {
     }
   }
 
-  Future<String> _requestReply({
+  Future<ReplyResult> _requestReply({
     String? extraSystemInstruction,
     int maxTokens = kDefaultMaxTokens,
   }) async {
@@ -361,7 +371,7 @@ class LibrarySession extends ChangeNotifier {
           _notify();
         },
       );
-      return result.text;
+      return result;
     } on ChatApiException catch (error) {
       throw friendlyHttpError(error.statusCode, error.responseText);
     }
