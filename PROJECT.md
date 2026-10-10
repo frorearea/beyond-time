@@ -302,7 +302,7 @@ node tool/scrub_archive.mjs <存档.json> --out clean.json
 - 大字文件（>800 行）优先拆分到 `lib/widgets/` 或 `lib/services/`
 - 人设文件 `assets/prompts/ereta_persona.txt` 有备份版本，修改前先备份
 - 测试：`tool/*_test.dart`（零依赖 `dart run`）+ `test/*_test.dart`（`flutter test`），新逻辑照此补充
-- **改完先跑全量**：`dart run tool/library_logic_test.dart` 等三套 + `flutter test`（38 项）+ `flutter analyze`。四套都过才算改完
+- **改完先跑全量**：`dart run tool/library_logic_test.dart` 等三套（均零依赖）+ `flutter test`（45 项）+ `flutter analyze`。**动了 `web/index.html` 还要加跑 `node tool/check_web_entry.mjs` 与 `node tool/web_entry_test.mjs`**。全部通过才算改完
 
 ### 指标闭环（改人设后怎么知道变好了）
 
@@ -510,10 +510,30 @@ node tool/scrub_archive.mjs <存档.json> --out clean.json
     - **解法**（`web/index.html`）：比对 `flutter_bootstrap.js` 里的 `serviceWorkerVersion`（Flutter 每次构建重算、随内容变化）→ 显示「图书馆刚整理过书架」→ 清 Cache Storage → 用 `cache:'reload'` 把 `index.html` / bootstrap / `main.dart.js` / `version.json` 回源一遍 → reload 一次。**一分钟内只自动 reload 一次**防死循环。
     - ⚠️ **不要改用 `build/web/.last_build_id` 当标记**：实测改了源码重新构建之后它**一个字节都不变**（只反映构建配置），拿它当标记会永远认为"没有新版本"。这个坑我踩过一次，是"重建后比对构建号"才发现的。
     - 标记用原生 localStorage（`beyondTimeJustTidied` / `beyondTimeRunningBuild`）/ `beyondTimeUpdateReloadAt`；Dart 侧的键在 `lib/config.dart` 的 `kJustTidiedKey`，**两边字符串必须一致**。
-    - ⚠️ **v1 把页面永久卡在了那句提示上（2026-10-11 当天修掉）。** 原因：`location.reload()` 被挂在 `prewarm()` 完成之后，而 **`fetch` 自己没有超时**——国内直连 GitHub Pages 拉 2.7MB 的 `main.dart.js` 一旦挂住，`Promise.all` 永不 settle，reload 永远不来，全屏遮罩就一直在。**两条必须遵守的规则**：
-      1. **绝不要把 reload 挂在没有上限的网络操作上。** 每个预热请求各自带 `AbortController` 超时，整体再 race 一个预算，最后还要有一个"无论网络怎样都 reload"的绝对期限。预热是锦上添花，不是前置条件。
-      2. **全屏遮罩必须有兜底消失时间。** 任何情况下都不能让人被关在一片黑里（包括 reload 被内嵌浏览器拦下的情况）。
-    - **这次的教训是"没验证就上线"。** 修完之后的验证方式值得复用：在 Node 里搭一个假浏览器（假 `document` / `localStorage` / `location` / `fetch`），把 `web/index.html` 里那段内联脚本抽出来用 `vm` 真跑一遍，并让 `main.dart.js` 的请求**永久挂住且忽略 abort**（比现实更严苛）——确认 reload 照常触发、遮罩照常消失。纯静态检查（`node --check`）通过并不代表逻辑对。
+    - ⚠️ **真正的元凶是 CSS 层叠，不是网络（2026-10-11 连续两次卡死）。**
+      - 第一版：reload 挂在没有超时的 `fetch` 上 → 网络一挂就永不 reload。
+      - 第二版（**修完仍然卡死**，因为上一版的诊断是错的）：样式写成
+        `#shelf-notice { display: flex }` + `<div hidden>`。**作者样式永远优先于浏览器默认样式表**，
+        所以 `[hidden] { display: none }` 被压掉 —— 遮罩**从第一帧起就可见**，
+        `el.hidden = true` 也永远不起作用，整页被永久盖住。与网络无关，
+        所以"不在国内了照样卡"。
+      - **现在的写法是 fail-safe 的**：基础规则 `display: none`（即使脚本整段没跑，页面也能用），
+        显示才挂 `.is-on`；淡入动画**不加 `forwards`**（否则会把 `opacity` 永久锁成 1，绕开显隐控制）；
+        提示亮 1 秒后**直接从 DOM 删除**（`removeChild`，任何样式都撤不回来），
+        reload 期限 1.5 秒，且 reload 前先删遮罩。
+      - **两条永久规则**：① 绝不要把 reload 挂在没有上限的网络操作上（每个请求各自超时 +
+        整体预算 + 绝对期限）；② 全屏遮罩的**默认状态必须不可见**，并且必须有兜底，
+        因为"作者样式压过 `hidden`"这类 bug 会让"隐藏"这个动作彻底失效。
+    - **配套的两个自动化检查（这次事故的直接产物，改 `web/index.html` 后必须都跑）**：
+      - `node tool/check_web_entry.mjs` —— 静态检查层叠语义：基础 display 必须是 `none`、
+        可见规则只准挂 `.is-on`、动画不许带 `forwards`、元素不许用 `hidden`、
+        必须有 `AbortController` 与有限的 reload 期限。**我把真 bug 塞回去验证过它会报 FAIL。**
+        （它自己第一版也被注释里的 `[hidden]{display:none}` 绊倒过，所以解析前先剥 CSS 注释。）
+      - `node tool/web_entry_test.mjs` —— 把内联脚本抽出来在假浏览器里真跑：网络永久挂住、
+        刚刷过、首次访问、同版本四种场景，断言遮罩一定被删、reload 行为正确。
+      - **教训：验证不能比被测对象浅。** 第一次"验证通过"是因为假浏览器把 `hidden` 当普通属性，
+        **完全没有模拟 CSS**——测了 JS 逻辑，没测渲染行为。以后涉及"页面上看得见/看不见"的改动，
+        静态检查必须直接针对样式规则本身。
     - 副作用要知道：**以后每次 push 都会触发已打开页面的 reload + 提示**（因为构建号变了）。这是想要的行为，但改纯文档也会让访客看到一次提示。
 
 ---

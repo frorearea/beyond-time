@@ -63,10 +63,15 @@
       2. **全屏遮罩必须有兜底消失时间。** 任何情况下都不能让人被关在一片黑里。
   -->
   <style>
+    /* ⚠️ 默认必须是 display:none，靠 .is-on 才显示。
+       曾经写成 `#shelf-notice { display: flex }` + `<div hidden>`——
+       **作者样式永远优先于浏览器默认样式表**，所以 `[hidden]{display:none}` 被压掉，
+       遮罩从第一帧就盖在页面上，`el.hidden = true` 也永远不起作用，
+       整页被永久锁死。默认不可见才是安全的状态：即使脚本完全没跑，页面也能用。 */
     #shelf-notice {
+      display: none;
       position: fixed;
       inset: 0;
-      display: flex;
       align-items: center;
       justify-content: center;
       background: #000;
@@ -75,14 +80,19 @@
       font-size: 20px;
       letter-spacing: 0.12em;
       z-index: 9999;
-      opacity: 0;
-      animation: shelf-notice-in 420ms ease-out forwards;
+      opacity: 1;
     }
+    #shelf-notice.is-on {
+      display: flex;
+      animation: shelf-notice-in 300ms ease-out;
+    }
+    /* 不加 forwards：动画结束后回到基础规则的 opacity:1，不靠动画锁状态 */
     @keyframes shelf-notice-in {
+      from { opacity: 0; }
       to { opacity: 1; }
     }
   </style>
-  <div id="shelf-notice" hidden>图书馆刚整理过书架</div>
+  <div id="shelf-notice">图书馆刚整理过书架</div>
 
   <script>
     (function () {
@@ -93,26 +103,36 @@
       var BOOTSTRAP = 'flutter_bootstrap.js';
 
       // 时间预算：没有一个"等网络"的动作可以无限期挂着。
-      var REQUEST_TIMEOUT_MS = 2500; // 单个预热请求的上限（含 2.7MB 的 main.dart.js）
-      var PREWARM_BUDGET_MS = 2600;  // 预热整体最多等这么久，到点就走
-      var NOTICE_MIN_MS = 900;       // 提示至少让人看清
-      var RELOAD_DEADLINE_MS = 5000; // 绝对期限：无论预热走到哪一步都 reload
-      var OVERLAY_MAX_MS = 9000;     // 万一 reload 被打断，也必须把遮罩收掉
+      var REQUEST_TIMEOUT_MS = 1200; // 单个预热请求的上限（含 2.7MB 的 main.dart.js）
+      var PREWARM_BUDGET_MS = 1300;  // 预热整体最多等这么久，到点就走
+      var NOTICE_MIN_MS = 600;       // 提示至少让人看清
+      var RELOAD_DEADLINE_MS = 1500; // 绝对期限：无论预热走到哪一步都 reload
+      var NOTICE_VISIBLE_MS = 1000;  // 遮罩最多亮这么久，然后从 DOM 里删掉
 
       var reloaded = false;
 
       function noticeEl() { return document.getElementById('shelf-notice'); }
-      function showNotice() { var el = noticeEl(); if (el) el.hidden = false; }
-      function hideNotice() { var el = noticeEl(); if (el) el.hidden = true; }
+      function showNotice() {
+        var el = noticeEl();
+        if (el) el.classList.add('is-on');
+      }
+      /// **直接从 DOM 删除**，而不是设 hidden。
+      ///
+      /// 设 `hidden` 曾经完全失效（作者 CSS 的 display 压过了 `[hidden]`），
+      /// 删除节点则是任何样式都无法撤销的。
+      function removeNotice() {
+        var el = noticeEl();
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+      }
 
       /// 带超时的 fetch。
       ///
-      /// **这是 v1 卡死的原因**：fetch 自身没有超时，国内直连 GitHub Pages 拉 2.7MB 的
-      /// main.dart.js 一旦挂住，Promise.all 永不 settle，reload 就永远不来，
-      /// 全屏提示把页面永久盖住。所以每个请求都要能自己放弃。
+      /// fetch 自身没有超时：一个挂住的请求会让 Promise.all 永不 settle，
+      /// 预热完不成就不 reload。所以每个请求都要能自己放弃。
+      /// （预热只是锦上添花，relaod 另有绝对期限兜底，见 [scheduleReload]。）
       function fetchWithTimeout(url, ms) {
         if (typeof AbortController !== 'function') {
-          return Promise.resolve(); // 老浏览器：不预热，交给下面的期限保证 reload
+          return Promise.resolve(); // 老浏览器：不预热，交给期限保证 reload
         }
         var ctl = new AbortController();
         var timer = setTimeout(function () { ctl.abort(); }, ms);
@@ -141,17 +161,16 @@
       function reloadOnce() {
         if (reloaded) return;
         reloaded = true;
+        removeNotice();          // 先收遮罩，再 reload
         try { location.reload(); } catch (e) {}
-        // reload 被拦下（某些内嵌浏览器会）也要把提示收掉，别把人关在黑屏里
-        setTimeout(hideNotice, 1200);
       }
 
       function scheduleReload() {
         var startedAt = Date.now();
-        // 兜底一：绝对期限
+        // 兜底一：绝对期限（无论预热走到哪一步）
         setTimeout(reloadOnce, RELOAD_DEADLINE_MS);
-        // 兜底二：遮罩一定会消失
-        setTimeout(hideNotice, OVERLAY_MAX_MS);
+        // 兜底二：遮罩最多亮 1 秒——**从 DOM 删掉**，任何样式都撤不回来
+        setTimeout(removeNotice, NOTICE_VISIBLE_MS);
 
         var budget = Promise.race([
           Promise.all([clearCaches(), prewarm()]).catch(function () {}),
@@ -196,13 +215,11 @@
           } catch (e) {}
 
           showNotice();
+          // 无论走哪条路，遮罩都在 1 秒内从 DOM 里删掉
+          setTimeout(removeNotice, NOTICE_VISIBLE_MS);
 
           // 一分钟内刚自动 reload 过，说明缓存还没换掉：这次只提示，不再刷页面。
-          // 提示也要自己收掉——绝不留一块黑屏在那里。
-          if (now - lastAttempt < 60 * 1000) {
-            setTimeout(hideNotice, 2600);
-            return;
-          }
+          if (now - lastAttempt < 60 * 1000) return;
 
           scheduleReload();
         })
