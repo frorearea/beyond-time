@@ -510,6 +510,11 @@ node tool/scrub_archive.mjs <存档.json> --out clean.json
     - **解法**（`web/index.html`）：比对 `flutter_bootstrap.js` 里的 `serviceWorkerVersion`（Flutter 每次构建重算、随内容变化）→ 显示「图书馆刚整理过书架」→ 清 Cache Storage → 用 `cache:'reload'` 把 `index.html` / bootstrap / `main.dart.js` / `version.json` 回源一遍 → reload 一次。**一分钟内只自动 reload 一次**防死循环。
     - ⚠️ **不要改用 `build/web/.last_build_id` 当标记**：实测改了源码重新构建之后它**一个字节都不变**（只反映构建配置），拿它当标记会永远认为"没有新版本"。这个坑我踩过一次，是"重建后比对构建号"才发现的。
     - 标记用原生 localStorage（`beyondTimeJustTidied` / `beyondTimeRunningBuild`）/ `beyondTimeUpdateReloadAt`；Dart 侧的键在 `lib/config.dart` 的 `kJustTidiedKey`，**两边字符串必须一致**。
+    - ⚠️ **v1 把页面永久卡在了那句提示上（2026-10-11 当天修掉）。** 原因：`location.reload()` 被挂在 `prewarm()` 完成之后，而 **`fetch` 自己没有超时**——国内直连 GitHub Pages 拉 2.7MB 的 `main.dart.js` 一旦挂住，`Promise.all` 永不 settle，reload 永远不来，全屏遮罩就一直在。**两条必须遵守的规则**：
+      1. **绝不要把 reload 挂在没有上限的网络操作上。** 每个预热请求各自带 `AbortController` 超时，整体再 race 一个预算，最后还要有一个"无论网络怎样都 reload"的绝对期限。预热是锦上添花，不是前置条件。
+      2. **全屏遮罩必须有兜底消失时间。** 任何情况下都不能让人被关在一片黑里（包括 reload 被内嵌浏览器拦下的情况）。
+    - **这次的教训是"没验证就上线"。** 修完之后的验证方式值得复用：在 Node 里搭一个假浏览器（假 `document` / `localStorage` / `location` / `fetch`），把 `web/index.html` 里那段内联脚本抽出来用 `vm` 真跑一遍，并让 `main.dart.js` 的请求**永久挂住且忽略 abort**（比现实更严苛）——确认 reload 照常触发、遮罩照常消失。纯静态检查（`node --check`）通过并不代表逻辑对。
+    - 副作用要知道：**以后每次 push 都会触发已打开页面的 reload + 提示**（因为构建号变了）。这是想要的行为，但改纯文档也会让访客看到一次提示。
 
 ---
 
