@@ -208,8 +208,27 @@ class LibrarySession extends ChangeNotifier {
     _profile = _storeHelper.loadUserProfile() ?? UserProfile();
     _profile.touch();
     _storeHelper.saveUserProfile(_profile);
+    // 顺序有意为之：更新回执在前，回归问候在后。问候是"她此刻说的话"，
+    // 而整理书架发生在这次推门之前。
+    _applyUpdateNotice();
     _applyReturnGreeting();
     _startIdleTimer();
+  }
+
+  /// 网页版刚更新过时，留一句回执。
+  ///
+  /// **走 [MessageKind.notice]，不是她说的话**：这不是艾蕾塔的台词，而是这个空间
+  /// 自己发出的通知（网页重新加载过一次）。所以它压暗显示、不进存档、不进上下文，
+  /// 也不会被写进 80 轮窗口去影响她的口癖——与书签回执、API Key 提示同一类。
+  ///
+  /// 标记由 `web/index.html` 写入，读取即清除（见 [StoreHelper.takeJustTidied]）。
+  void _applyUpdateNotice() {
+    if (!_storeHelper.takeJustTidied()) return;
+    _append(const ChatMessage(
+      role: 'assistant',
+      content: '图书馆刚整理过书架。',
+      kind: MessageKind.notice,
+    ));
   }
 
   // ---------------------------------------------------------------- 回归弧

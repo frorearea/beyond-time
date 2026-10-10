@@ -149,6 +149,51 @@ void main() {
     });
   });
 
+  group('网页更新回执', () {
+    // web/index.html 在检测到新构建、准备 reload 之前，会往原生 localStorage 写一个标记。
+    // 这里验证它变成的是**系统回执**而不是她的话，并且只显示一次。
+    test('刚更新过时留一句 notice，读取即清除，且不进对话记录', () {
+      final s = buildSession(seed: {kJustTidiedKey: '1'});
+
+      final last = s.session.messages.last;
+      expect(last.kind, MessageKind.notice, reason: '不是她说的话，是空间的回执');
+      expect(last.content, contains('整理过书架'));
+      // 关键：不进上下文、不进存档
+      expect(s.session.conversationHistory.any((m) => m.content.contains('整理过书架')),
+          isFalse);
+      expect(_historyContents(s.store).any((c) => c.contains('整理过书架')), isFalse);
+      // 读取即清除：下次打开不再重放
+      expect(s.store.read(kJustTidiedKey), isNull);
+      s.session.dispose();
+    });
+
+    test('没有标记时不出现回执', () {
+      final s = buildSession();
+      expect(
+          s.session.messages.any((m) => m.content.contains('整理过书架')), isFalse);
+      s.session.dispose();
+    });
+
+    test('有历史时回执也只在这次出现，且排在回归问候之前', () {
+      final s = buildSession(seed: {
+        kJustTidiedKey: '1',
+        kLastVisitKey:
+            DateTime.now().subtract(const Duration(days: 3)).toIso8601String(),
+        kHistoryKey: jsonEncode([
+          {'role': 'user', 'content': '上次那句话'},
+        ]),
+      });
+      final messages = s.session.messages;
+      final noticeIndex =
+          messages.indexWhere((m) => m.content.contains('整理过书架'));
+      final greetingIndex = messages.indexWhere((m) => m.kind == MessageKind.ambient);
+      expect(noticeIndex, greaterThanOrEqualTo(0));
+      expect(greetingIndex, greaterThan(noticeIndex),
+          reason: '整理书架发生在她这次开口之前，回执应排在问候前面');
+      s.session.dispose();
+    });
+  });
+
   group('消息种类隔离（A1/A3 回归防护）', () {
     test('从 localStorage 加载历史时也会清洗老版本的噪音（粘性污染回归）', () {
       // 复现真实成因：老版本把环境语/回执写进了 localStorage，那些条目没有

@@ -198,6 +198,17 @@ class StoreHelper {
     _store.delete(kOpenThreadsKey);
   }
 
+  /// 读取并清除"网页刚更新过"的标记。
+  ///
+  /// 标记由 `web/index.html` 在检测到新构建、准备 reload 之前写入原生 localStorage
+  /// （见 [kJustTidiedKey]）。**读取即清除**：这件事只该被通知一次，
+  /// 否则每次打开都会重放一遍"图书馆刚整理过书架"。
+  bool takeJustTidied() {
+    if (_store.read(kJustTidiedKey) == null) return false;
+    _store.delete(kJustTidiedKey);
+    return true;
+  }
+
   List<CreationNote> loadCreations() {
     final raw = _store.read(kCreationsKey);
     if (raw == null) return const [];

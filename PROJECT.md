@@ -227,8 +227,9 @@ node tool/scrub_archive.mjs <存档.json> --out clean.json
 
 - API 配置存 localStorage（`beyondTimeFlutterSettings`）；`server.js` 本地代理 `/api/chat`
 - 线上环境（GitHub Pages 等）仅 localhost 走 `/api/chat` 代理，其余直连 API；Cloudflare 域名（`.workers.dev`/`.pages.dev`）也走代理（见 `chat_api_web.dart` 的 hostname 判断）
-- **消息种类**（`MessageKind`）：`chat` 才入存档与上下文；`ambient`（环境语：idle 台词、回归问候）、`notice`（书签回执、API Key 提示）、`error`（连接失败）的归宿都只是界面
+- **消息种类**（`MessageKind`）：`chat` 才入存档与上下文；`ambient`（环境语：idle 台词、回归问候）、`notice`（书签回执、API Key 提示、**网页刚更新过的回执**）、`error`（连接失败、空回复提示）的归宿都只是界面
   - **渲染口径（2026-10-04 定）**：只有 `notice` / `error` 压暗缩小——它们是系统回执，不是她说的话。**`ambient` 不压暗**：idle 台词与回归问候本来就是"她在说话"，以跟她真话相同的亮度与字号呈现。文档以前写的是"三种都压暗"，与 `message_view.dart` 的实现不符，已按实现改正；重构时留下的死代码 `ChatMessage.isAmbient` 也一并删掉了
+  - **「图书馆刚整理过书架」走 `notice`**（2026-10-11）：它是这个空间发出的通知（网页重新加载过一次），不是艾蕾塔的台词。选 `notice` 而不是 `ambient`，是因为 `ambient` 会被当作"她说过的话"渲染成正常亮度，而这句话不该冒充她。回执**读取即清除**（`StoreHelper.takeJustTidied`），否则每次打开都会重放
 - **回归问候是"一次性"的，不留在历史里**（2026-10-04 确认保持这个设计）：`_applyReturnGreeting` 把它作为 `ambient` 插入，而 `_persistHistory()` 只写 `chat`，所以刷新之后就不在了（除非档位仍然成立，比如回来还没说话）。**2026-10-04 之前看起来"有记录"，是因为老版本把环境语当 `chat` 存进了 localStorage**——那正是被清洗掉的那 46 条。如果哪天想要"每次回来的问候都留个痕迹"，那需要给 `ambient` 单独开一条"界面可见、不写存档、不进上下文"的通道，不要图省事把它变成 `chat`（那会重新污染 80 轮上下文窗口，并影响她的称呼与口癖）
 - 环境语**页面同时至多一条**，且**不写入存档**
 - `max_tokens` 默认 **1600**（`kDefaultMaxTokens`）。**不能调小**：同时开启 thinking 时思维链会吃掉预算，520 曾导致 101 条回复里有 4 条被切断在句子中间；1000 又会偶尔被思维链整份吃光（见下一条）。提到 1600 不会让平均成本翻倍——旧值下失败一次本来就要花两次请求
@@ -258,6 +259,7 @@ node tool/scrub_archive.mjs <存档.json> --out clean.json
 - 仓库 Settings → Pages → Source 需选 **GitHub Actions**
 - 国内直连慢，需代理才能流畅加载
 - 线上对话直连 DeepSeek 可能遇 CORS；待办：配 Cloudflare Worker 代理（已配置 wrangler.toml + workflow + secrets，**当前搁置**，等有域名再启用）
+- **版本更新会自动 reload 一次，并显示「图书馆刚整理过书架」**（2026-10-11 加，实现在 `web/index.html` 的一段内联脚本里）。做这件事的原因和两个坑见第六节第 30 条
 
 ### 部署（Docker）
 
@@ -502,6 +504,12 @@ node tool/scrub_archive.mjs <存档.json> --out clean.json
 27. **改人设时，语域是会被顺手改掉的东西**。2026-10-11 实测：一条正面指令（"看得准"）就让意象掉 24%、碎句翻倍。**每次改完人设都要跑一次 `archive_report.mjs` 看第 4 节的语域读数**，不要只看"她是不是不那么谄媚了"
 28. **改人设之前先跟两份原始备份对照**：`ereta_persona_full_backup_20260607.txt` 与 `ereta_persona_compact_backup_20260608.txt`。很多"退步"其实就是某一轮把原文改掉了——例如长度指标、比喻上限、"让她表现出兴致"那一段。备份里还有一节 `她的偏好和情绪会自然露出来`（纯性格、零约束），2026-10-11 才从 full 备份恢复回来
 29. **`conversation_context.dart` 只允许两种 system 注入**：数据边界与 `formatInstruction`。任何"每轮……""不要用……开头"式的写法都属于行为约束，违反最优先原则。`tool/library_logic_test.dart` 有护栏（遍历注入内容，命中禁用词即红），**加 prompt 前先跑它**
+30. **"推送之后网页看不到更新"是长期毛病，根因有两个，都已处理（2026-10-11）**：
+    - **Flutter 自带的 service worker 永远不触发。**`flutter_service_worker.js` 每次构建**内容完全相同**（固定的 784 字节桩：install 时 skipWaiting，activate 时注销自己并 navigate 所有 client）。浏览器按脚本字节比对判断有没有新版本，字节一样就永远不 install/activate，**它自带的那次自动 reload 从来不会发生**。
+    - **GitHub Pages 的 `cache-control: max-age=600`**。就算 reload，浏览器还可能再吃 10 分钟旧缓存；单纯 reload 会变成"仍旧 → 又检测到新版 → 再 reload"的死循环。
+    - **解法**（`web/index.html`）：比对 `flutter_bootstrap.js` 里的 `serviceWorkerVersion`（Flutter 每次构建重算、随内容变化）→ 显示「图书馆刚整理过书架」→ 清 Cache Storage → 用 `cache:'reload'` 把 `index.html` / bootstrap / `main.dart.js` / `version.json` 回源一遍 → reload 一次。**一分钟内只自动 reload 一次**防死循环。
+    - ⚠️ **不要改用 `build/web/.last_build_id` 当标记**：实测改了源码重新构建之后它**一个字节都不变**（只反映构建配置），拿它当标记会永远认为"没有新版本"。这个坑我踩过一次，是"重建后比对构建号"才发现的。
+    - 标记用原生 localStorage（`beyondTimeJustTidied` / `beyondTimeRunningBuild`）/ `beyondTimeUpdateReloadAt`；Dart 侧的键在 `lib/config.dart` 的 `kJustTidiedKey`，**两边字符串必须一致**。
 
 ---
 

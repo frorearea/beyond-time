@@ -41,6 +41,115 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <!--
+    版本更新提示。
+
+    为什么不靠 service worker：Flutter 生成的 flutter_service_worker.js 每次构建
+    **内容完全相同**（一个固定的 784 字节桩：install 时 skipWaiting，activate 时
+    注销自己并 navigate 所有 client）。浏览器按脚本字节比对判断"有没有新版本"，
+    字节一样就永远不触发 install/activate——所以它自带的那次自动 reload 从来不会发生。
+
+    所以这里自己比对构建号，取的是 flutter_bootstrap.js 里的 serviceWorkerVersion
+    （Flutter 每次构建重算、随内容变化）。检测到服务器上是新构建时：显示一句提示 →
+    把关键文件用 cache:'reload' 重新拉一遍（GitHub Pages 给静态资源
+    cache-control: max-age=600，光 reload 还会命中旧缓存，那会变成"reload → 仍是旧版 →
+    又检测到新版 → 再 reload"的死循环）→ reload 一次。
+  -->
+  <style>
+    #shelf-notice {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      color: #fff;
+      font-family: LXGWWenKai, STSong, "Songti SC", "Noto Serif CJK SC", SimSun, serif;
+      font-size: 20px;
+      letter-spacing: 0.12em;
+      z-index: 9999;
+      opacity: 0;
+      animation: shelf-notice-in 420ms ease-out forwards;
+    }
+    @keyframes shelf-notice-in {
+      to { opacity: 1; }
+    }
+  </style>
+  <div id="shelf-notice" hidden>图书馆刚整理过书架</div>
+
+  <script>
+    (function () {
+      // 与 lib/config.dart 的 kJustTidiedKey 必须一致（Dart 侧读它来显示回执）。
+      var NOTICE_KEY = 'beyondTimeJustTidied';
+      var BUILD_KEY = 'beyondTimeRunningBuild';
+      var ATTEMPT_KEY = 'beyondTimeUpdateReloadAt';
+      var BOOTSTRAP = 'flutter_bootstrap.js';
+
+      function showNotice() {
+        var el = document.getElementById('shelf-notice');
+        if (el) el.hidden = false;
+      }
+
+      // 用 cache:'reload' 强制回源，把 HTTP 缓存里的旧副本换掉。
+      function prewarm() {
+        var files = ['index.html', BOOTSTRAP, 'main.dart.js', 'version.json'];
+        return Promise.all(files.map(function (f) {
+          return fetch(f, { cache: 'reload' }).catch(function () {});
+        }));
+      }
+
+      // 老版本 Flutter 的 service worker 会缓存资源；顺手清掉，别让旧副本留下。
+      function clearCaches() {
+        if (!('caches' in window)) return Promise.resolve();
+        return caches.keys().then(function (keys) {
+          return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+        }).catch(function () {});
+      }
+
+      // 构建号取自 flutter_bootstrap.js 里的 serviceWorkerVersion——它是 Flutter 每次
+      // 构建重算的、**随内容变化**的值（本地 1744333830 vs 线上 16290139 实测不同）。
+      //
+      // 注意 **不要**改用 build/web/.last_build_id：我实测过，改了源码重新构建之后
+      // 它一个字节都不变（它只反映构建配置），拿它当标记会永远认为"没有新版本"。
+      // 用 cache:'no-cache' 而不是 'no-store'：让浏览器带 ETag 去校验，
+      // 没更新时是一个 304，省流量。
+      fetch(BOOTSTRAP, { cache: 'no-cache' })
+        .then(function (r) { return r.ok ? r.text() : null; })
+        .then(function (text) {
+          if (!text) return;
+          var m = /serviceWorkerVersion:\s*"([^"]+)"/.exec(text);
+          var id = m ? m[1].trim() : '';
+          if (!id) return;                       // 开发服务器等情况下没有这个字面量
+          var running = null;
+          try { running = localStorage.getItem(BUILD_KEY); } catch (e) { return; }
+          if (running === null) {                // 第一次来：只记下，不打扰
+            try { localStorage.setItem(BUILD_KEY, id); } catch (e) {}
+            return;
+          }
+          if (running === id) return;            // 已经是最新
+
+          // 服务器上是新构建，而当前这一页是旧的。
+          var now = Date.now();
+          var lastAttempt = 0;
+          try { lastAttempt = Number(localStorage.getItem(ATTEMPT_KEY)) || 0; } catch (e) {}
+          try {
+            localStorage.setItem(BUILD_KEY, id);
+            localStorage.setItem(NOTICE_KEY, '1');
+            localStorage.setItem(ATTEMPT_KEY, String(now));
+          } catch (e) {}
+
+          showNotice();
+          // 一分钟内只自动 reload 一次：万一缓存还没换掉，也不要把页面刷成风车。
+          if (now - lastAttempt < 60 * 1000) return;
+
+          clearCaches().then(prewarm).then(function () {
+            setTimeout(function () { location.reload(); }, 1100);
+          });
+        })
+        .catch(function () {});
+    })();
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

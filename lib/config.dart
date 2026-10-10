@@ -9,6 +9,12 @@ const String kCreationsKey = 'beyondTimeCreations';
 const String kLastVisitKey = 'beyondTimeLastVisit';
 const String kUserProfileKey = 'beyondTimeUserProfile';
 
+/// 网页版"刚更新过"的标记。
+///
+/// **写入方是 `web/index.html`**（直接用原生 localStorage，不经过 Dart），
+/// 读取方是 `StoreHelper.takeJustTidied()`。两边必须用同一个字符串。
+const String kJustTidiedKey = 'beyondTimeJustTidied';
+
 const String kPersonaAsset = 'assets/prompts/ereta_persona.txt';
 const String kFallbackPersona = '角色：艾蕾塔 · 图书馆的魔女';
 
