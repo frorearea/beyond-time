@@ -54,6 +54,13 @@
     把关键文件用 cache:'reload' 重新拉一遍（GitHub Pages 给静态资源
     cache-control: max-age=600，光 reload 还会命中旧缓存，那会变成"reload → 仍是旧版 →
     又检测到新版 → 再 reload"的死循环）→ reload 一次。
+
+    ⚠️ 两条血泪约束（v1 因为违反第一条，把页面永久卡在了这句提示上）：
+      1. **reload 绝不能挂在没有上限的网络操作上。** 国内直连 GitHub Pages 很慢，
+         main.dart.js 有 2.7MB；fetch 本身没有超时，一个挂住的请求会让 Promise.all
+         永不 settle，reload 就永远不来。所以：每个请求各自带 AbortController 超时，
+         整体再有预算，最后还有一个"无论如何都 reload"的绝对期限。
+      2. **全屏遮罩必须有兜底消失时间。** 任何情况下都不能让人被关在一片黑里。
   -->
   <style>
     #shelf-notice {
@@ -85,16 +92,41 @@
       var ATTEMPT_KEY = 'beyondTimeUpdateReloadAt';
       var BOOTSTRAP = 'flutter_bootstrap.js';
 
-      function showNotice() {
-        var el = document.getElementById('shelf-notice');
-        if (el) el.hidden = false;
+      // 时间预算：没有一个"等网络"的动作可以无限期挂着。
+      var REQUEST_TIMEOUT_MS = 2500; // 单个预热请求的上限（含 2.7MB 的 main.dart.js）
+      var PREWARM_BUDGET_MS = 2600;  // 预热整体最多等这么久，到点就走
+      var NOTICE_MIN_MS = 900;       // 提示至少让人看清
+      var RELOAD_DEADLINE_MS = 5000; // 绝对期限：无论预热走到哪一步都 reload
+      var OVERLAY_MAX_MS = 9000;     // 万一 reload 被打断，也必须把遮罩收掉
+
+      var reloaded = false;
+
+      function noticeEl() { return document.getElementById('shelf-notice'); }
+      function showNotice() { var el = noticeEl(); if (el) el.hidden = false; }
+      function hideNotice() { var el = noticeEl(); if (el) el.hidden = true; }
+
+      /// 带超时的 fetch。
+      ///
+      /// **这是 v1 卡死的原因**：fetch 自身没有超时，国内直连 GitHub Pages 拉 2.7MB 的
+      /// main.dart.js 一旦挂住，Promise.all 永不 settle，reload 就永远不来，
+      /// 全屏提示把页面永久盖住。所以每个请求都要能自己放弃。
+      function fetchWithTimeout(url, ms) {
+        if (typeof AbortController !== 'function') {
+          return Promise.resolve(); // 老浏览器：不预热，交给下面的期限保证 reload
+        }
+        var ctl = new AbortController();
+        var timer = setTimeout(function () { ctl.abort(); }, ms);
+        return fetch(url, { cache: 'reload', signal: ctl.signal })
+          .catch(function () {})
+          .then(function (r) { clearTimeout(timer); return r; });
       }
 
       // 用 cache:'reload' 强制回源，把 HTTP 缓存里的旧副本换掉。
+      // 拉不完也没关系——下面的期限会照常 reload，只是可能还拿到旧副本。
       function prewarm() {
         var files = ['index.html', BOOTSTRAP, 'main.dart.js', 'version.json'];
         return Promise.all(files.map(function (f) {
-          return fetch(f, { cache: 'reload' }).catch(function () {});
+          return fetchWithTimeout(f, REQUEST_TIMEOUT_MS);
         }));
       }
 
@@ -104,6 +136,31 @@
         return caches.keys().then(function (keys) {
           return Promise.all(keys.map(function (k) { return caches.delete(k); }));
         }).catch(function () {});
+      }
+
+      function reloadOnce() {
+        if (reloaded) return;
+        reloaded = true;
+        try { location.reload(); } catch (e) {}
+        // reload 被拦下（某些内嵌浏览器会）也要把提示收掉，别把人关在黑屏里
+        setTimeout(hideNotice, 1200);
+      }
+
+      function scheduleReload() {
+        var startedAt = Date.now();
+        // 兜底一：绝对期限
+        setTimeout(reloadOnce, RELOAD_DEADLINE_MS);
+        // 兜底二：遮罩一定会消失
+        setTimeout(hideNotice, OVERLAY_MAX_MS);
+
+        var budget = Promise.race([
+          Promise.all([clearCaches(), prewarm()]).catch(function () {}),
+          new Promise(function (res) { setTimeout(res, PREWARM_BUDGET_MS); }),
+        ]);
+        budget.then(function () {
+          var wait = Math.max(0, NOTICE_MIN_MS - (Date.now() - startedAt));
+          setTimeout(reloadOnce, wait);
+        }).catch(function () { reloadOnce(); });
       }
 
       // 构建号取自 flutter_bootstrap.js 里的 serviceWorkerVersion——它是 Flutter 每次
@@ -139,12 +196,15 @@
           } catch (e) {}
 
           showNotice();
-          // 一分钟内只自动 reload 一次：万一缓存还没换掉，也不要把页面刷成风车。
-          if (now - lastAttempt < 60 * 1000) return;
 
-          clearCaches().then(prewarm).then(function () {
-            setTimeout(function () { location.reload(); }, 1100);
-          });
+          // 一分钟内刚自动 reload 过，说明缓存还没换掉：这次只提示，不再刷页面。
+          // 提示也要自己收掉——绝不留一块黑屏在那里。
+          if (now - lastAttempt < 60 * 1000) {
+            setTimeout(hideNotice, 2600);
+            return;
+          }
+
+          scheduleReload();
         })
         .catch(function () {});
     })();
