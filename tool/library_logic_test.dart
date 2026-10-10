@@ -649,46 +649,38 @@ void main() {
   check('创作稿提示写明那是他的东西，不是她的',
       context.any((m) =>
           m['content']!.contains('红羽离笼记') && m['content']!.contains('不是你的')));
-  check('性格说话方式被注入',
-      context.any(
-          (m) => m['content'] == ConversationContext.characterVoiceInstruction));
-  check('说话指令以身份开头（魔女不是评论员）',
-      ConversationContext.characterVoiceInstruction.contains('魔女，不是评论员'));
-  check('说话指令要求用看见的东西说话、不要用判断说话',
-      ConversationContext.characterVoiceInstruction.contains('不要用判断说话'));
-  check('说话指令禁止把自己压成直白简单的结论',
-      ConversationContext.characterVoiceInstruction.contains('直白、简单'));
-  check('说话指令禁止为显得独立而硬造异议',
-      ConversationContext.characterVoiceInstruction.contains('硬造异议'));
-  check('说话指令也禁止为好看硬凑意象（分寸不等于配额）',
-      ConversationContext.characterVoiceInstruction.contains('硬凑意象'));
-  // 人设与指令里出现 Markdown 加粗，她会跟着在回复里吐星号（她被要求不输出任何标记）。
-  check('注入指令里没有 Markdown 标记',
-      !ConversationContext.characterVoiceInstruction.contains('**'));
-
-  // 2026-10-04：她主动收尾的倾向（「今晚到这儿就可以了，去睡吧」）被明确否掉。
-  // 这不只是语气问题——替访客规定"什么时候该休息、什么时候该走"正是本项目反对的规训。
-  check('说话指令禁止主动结束对话',
-      ConversationContext.characterVoiceInstruction.contains('不要主动结束对话'));
-  check('说话指令禁止替访客决定什么时候走',
-      ConversationContext.characterVoiceInstruction
-          .contains('替访客决定什么时候走'));
-  check('说话指令里的"不必用问题收尾"没有单独出现（否则会滑向总结式收场）',
-      ConversationContext.characterVoiceInstruction.contains('不必每轮都用问题收尾') &&
-          ConversationContext.characterVoiceInstruction
-              .contains('不要因此改用总结替他收场'));
-  check('危机时的指引没有说成"今天到此为止"',
-      ConversationContext.characterVoiceInstruction.contains('接着听'));
-
-  // 回归防护（2026-10-04 的教训）：不要再给人格设"每轮至少一处异议"这种配额，
-  // 也不要在指令里点名具体的转折词。这两件事会立刻变成口癖——存档里出现了
-  // 「不过我得说句不客气的 / 提个醒 / 挑一句 / 泼一点凉水」四种近乎相同的说法。
-  check('说话指令不含"每轮至少"这类异议配额',
-      !ConversationContext.characterVoiceInstruction.contains('每轮至少'));
-  check('说话指令不点名具体转折词',
-      !ConversationContext.characterVoiceInstruction.contains('我倒觉得') &&
-          !ConversationContext.characterVoiceInstruction.contains('未必') &&
-          !ConversationContext.characterVoiceInstruction.contains('不见得'));
+  // ------------------------------------------------------------ 最优先原则
+  //
+  // 2026-10-11 定的最优先原则：**按人设让她最自然地把话说出来；不对她的回答加以限制
+  // 或判断；不让她的回答去达成任何指标。** 所以运行时只保留两种 system 注入：
+  // 数据边界（书签不是对他的描述之类）与纯格式限制。
+  //
+  // 下面这组是护栏：任何"每轮…""不要…开头"式的行为约束被重新塞回来，都会在这里红。
+  final injectedSystem = context
+      .where((m) => m['role'] == 'system')
+      .map((m) => m['content']!)
+      .toList();
+  check('格式限制仍然注入',
+      injectedSystem.any((c) => c == ConversationContext.formatInstruction));
+  check('格式限制写明只限格式（不涉及内容与语气）',
+      ConversationContext.formatInstruction.contains('只限格式'));
+  check('格式限制仍然禁止 Markdown 与 <br>',
+      ConversationContext.formatInstruction.contains('Markdown') &&
+          ConversationContext.formatInstruction.contains('<br>'));
+  for (final banned in const [
+    '每轮至少',
+    '每轮都',
+    '硬造异议',
+    '硬凑意象',
+    '看得准',
+    '不要主动结束对话',
+    '用判断说话',
+  ]) {
+    check('注入的 system 里不再有行为约束「$banned」',
+        !injectedSystem.any((c) => c.contains(banned)));
+  }
+  check('没有"说话方式"这类逐轮指令被注入',
+      !injectedSystem.any((c) => c.startsWith('这一轮的说话方式')));
 
   // 记忆注入必须分栏：书签以"收藏"的身份出现，而不是被当成对来访者的描述。
   final splitContext = const ConversationContext().buildMessages(
@@ -715,34 +707,43 @@ void main() {
     print('SKIP: 找不到人设文件（仓库根目录运行本测试）');
   } else {
     final persona = personaFile.readAsStringSync();
-    check('人设写明图书馆没有关门时间', persona.contains('图书馆没有关门时间'));
-    check('人设点名她不说"去睡吧"这类话', persona.contains('去睡吧'));
-    check('人设把"不替访客定作息"接到项目主旨上',
-        persona.contains('全是别人替他定的'));
-    check('人设保留了"你回来说，我接着听"的姿态', persona.contains('我接着听'));
-    check('人设没有把收尾句当成正面示范',
-        !persona.contains('今晚到这儿就可以了'));
-    check('人设仍写着"她享受聪明"（正面气质没有被规则挤掉）',
-        persona.contains('她聪明，而且享受聪明'));
 
-    // 2026-10-11 语域事故：她的意象掉了三成、碎句翻倍。修法是强化身份与人设，
-    // **不是给比喻设配额**（那正是"给人格设指标"的老坑）。
-    check('人设有"她的声音"专节（身份优先于规则）',
-        persona.contains('她的声音'));
+    // ---- 性格化的部分：她是什么样的人（这些可以有）----
+    check('人设仍写着"她享受聪明"', persona.contains('她聪明，而且享受聪明'));
+    check('人设有"她的声音"（身份，不是规则）', persona.contains('她的声音'));
     check('人设写明比喻是她思考的样子，不是装饰',
         persona.contains('她的比喻不是装饰'));
-    check('人设禁止用空词加重语气',
-        persona.contains('特别') && persona.contains('空词'));
     check('人设有正例', persona.contains('随时可以被更新的简历'));
-    check('人设有反例（太直白、太平、太像客服）',
-        persona.contains('她不要的样子') && persona.contains('太像客服'));
-    check('人设明确要求不要把自己压扁成直白判断',
-        persona.contains('不要在回复里把自己压扁'));
-    check('人设不再给比喻设"最多一个"的数量上限',
-        !persona.contains('最多使用一个核心比喻'));
-    check('人设不再因 thinking 而要求压短出口',
-        !persona.contains('180 到 260') &&
-            persona.contains('不要因为系统开了 thinking 就把自己压短'));
+    check('人设写明她看东西深一层但从不下判决',
+        persona.contains('从不下判决'));
+    check('人设把她不替访客定作息写成性格，并接回项目主旨',
+        persona.contains('图书馆没有关门时间') &&
+            persona.contains('全是别人替他定的'));
+    check('人设保留了她的偏好与情绪（自然流露，不是指令）',
+        persona.contains('她的偏好和情绪会自然露出来'));
+    check('人设恢复了"语气平缓、优雅、聪明"这类语域描述',
+        persona.contains('语气平缓、优雅、聪明'));
+
+    // ---- 约束性的部分：对她的限制与指标（这些不该有）----
+    check('人设不再用禁语黑名单（不出现"去睡吧"）',
+        !persona.contains('去睡吧'));
+    check('人设不再有"每轮/每句"句式约束',
+        !persona.contains('每轮都') && !persona.contains('少用反问'));
+    check('人设不再给比喻设数量上限',
+        !persona.contains('最多使用一个核心比喻') && !persona.contains('最多一个'));
+    check('人设不再有字数指标',
+        !persona.contains('个中文字符') && !persona.contains('180'));
+    check('人设不再有"她不要的样子"这类对回答的评判',
+        !persona.contains('她不要的样子') && !persona.contains('太像客服'));
+    check('人设不再出现"不要在回复里把自己压扁"这类指令',
+        !persona.contains('不要在回复里'));
+
+    // ---- 格式限制：按用户要求保留 ----
+    check('人设保留了括号动作描写限制',
+        persona.contains('不要使用括号动作描写'));
+    check('人设保留了环境描写限制', persona.contains('基本避免环境描写'));
+    check('人设保留了对喜欢/暧昧与疲惫情形的照应（原文）',
+        persona.contains('可以被取悦') && persona.contains('像把灯调暗'));
     check('人设里没有 Markdown 标记（否则她会跟着吐星号）',
         !persona.contains('**'));
   }
