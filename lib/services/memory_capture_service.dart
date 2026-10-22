@@ -99,7 +99,12 @@ ${creationDigest(existingCreations)}
 ''',
           },
         ],
-        'temperature': 0.15,
+        // 0.15 → 0.3（2026-10-22）。
+        //
+        // 这是结构化抽取（只输出 JSON），温度必须低，否则会编造记忆、格式也可能坏。
+        // 但 0.15 太接近"摘要机器"：写出来的记忆条目干硬，而这些条目会被注入到
+        // 她的上下文里，久而久之把她的语域往下拽。0.3 仍是低温，只在措辞上松一点。
+        'temperature': 0.3,
         'max_tokens': 520,
         'stream': true,
         'stream_options': {'include_usage': false},

@@ -372,7 +372,14 @@ class LibrarySession extends ChangeNotifier {
         userProfile: _profile,
         extraSystemInstruction: extraSystemInstruction,
       ),
-      'temperature': 1.35,
+      // 1.35 → 1.15（2026-10-22）。
+      //
+      // 1.35 让她愿意挑低频但有味道的搭配；代价是偶尔造出"有人天生就亮"这种压缩过头
+      // 的单字谓语，写完读起来不温柔。1.15 收一点出格，但仍属高温，不至于退回平铺直叙
+      // （记忆整理那边 0.3 的产出就是"平铺直叙"长什么样，可以对照）。
+      //
+      // 不要再往下压很多：这个值同时是她"声音"的来源，压到 1.0 以下会明显变干。
+      'temperature': 1.15,
       'max_tokens': maxTokens,
       'stream': true,
       'stream_options': {'include_usage': false},
