@@ -52,7 +52,11 @@ const String _kTerminalChars = '。！？…～!?.”’」』】》〉）)]}';
 /// 于是触发一次完整重试：来访者等两轮，还先看见一句"没有返回内容"。
 /// 提到 1600 让这种情况变罕见；**这不会让平均成本翻倍**，
 /// 因为在旧值下失败一次本来就要花两次请求。
-const int kDefaultMaxTokens = 1600;
+///
+/// v3：2026-10-22 人设里不再限制她的回复字数（她可以为了一个意象把句子写长），
+/// 于是给正文留出更大余量，提到 2400。**上限不是要求**——她写完了就停，
+/// 这个值只在"她正好写得长"时不把她切断。
+const int kDefaultMaxTokens = 2400;
 
 class ReplyCompleter {
   ReplyCompleter(this._chatApi);

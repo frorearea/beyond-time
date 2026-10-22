@@ -708,21 +708,60 @@ void main() {
   } else {
     final persona = personaFile.readAsStringSync();
 
-    // ---- 性格化的部分：她是什么样的人（这些可以有）----
-    check('人设仍写着"她享受聪明"', persona.contains('她聪明，而且享受聪明'));
-    check('人设有"她的声音"（身份，不是规则）', persona.contains('她的声音'));
-    check('人设写明比喻是她思考的样子，不是装饰',
-        persona.contains('她的比喻不是装饰'));
-    check('人设有正例', persona.contains('随时可以被更新的简历'));
-    check('人设写明她看东西深一层但从不下判决',
-        persona.contains('从不下判决'));
-    check('人设把她不替访客定作息写成性格，并接回项目主旨',
-        persona.contains('图书馆没有关门时间') &&
-            persona.contains('全是别人替他定的'));
-    check('人设保留了她的偏好与情绪（自然流露，不是指令）',
-        persona.contains('她的偏好和情绪会自然露出来'));
-    check('人设恢复了"语气平缓、优雅、聪明"这类语域描述',
-        persona.contains('语气平缓、优雅、聪明'));
+    // ---- 她是被"写成一个人"的，不是被要求的 ----
+    // 2026-10-22：整篇重写为第三人称描写（不再是"要/不要…"的指令清单）。
+    check('开头明说这不是规则，而是她本人',
+        persona.contains('下面写的不是给你的规则，是你自己'));
+    check('有那条"人不该被换算成分数"的线',
+        persona.contains('人不该被换算成分数'));
+    check('写明她几乎不说出来（不点破），这是她最温柔的地方',
+        persona.contains('这条线她几乎不说出来') &&
+            persona.contains('这是她最温柔的地方'));
+    check('用"从不给来访者打分"这种为人写法，而不是禁令',
+        persona.contains('她从不给来访者打分'));
+    check('她只在必要时说破、不给人贴结论',
+        persona.contains('只在必要的时候说破') &&
+            persona.contains('不给人贴结论'));
+
+    // ---- 语域：文学少女，但不过分繁复 ----
+    check('她像在念一本读过很多遍的旧书',
+        persona.contains('像在念一本自己读过很多遍的旧书'));
+    check('比喻从她见过的东西里长出来',
+        persona.contains('灯、雨、书页、茶、旧唱片、船、星'));
+    check('她不喜欢堆砌、宁可留白（把"过度花哨"写成本人的审美）',
+        persona.contains('她不喜欢堆砌') && persona.contains('她宁可留白'));
+    check('她的词里没有办公室的味道（点名单字压缩式说法）',
+        persona.contains('没有办公室的味道') &&
+            persona.contains('我拆一下'));
+    check('她不结案、不说"所以您是……"',
+        persona.contains('她也不结案'));
+    check('恢复了她自己说过的梦幻例句',
+        persona.contains('每一集都像一篇温柔的水彩') &&
+            persona.contains('像咬了一口期待已久的点心') &&
+            persona.contains('有些火苗不是在阳光下才亮'));
+
+    // ---- 从 6 月完整备份恢复的、被压缩删掉的声音材料 ----
+    check('恢复了"情绪表达与腹黑感"的示范台词',
+        persona.contains('这倒让我有点不高兴') &&
+            persona.contains('您终于说了句像样的真话'));
+    check('恢复了小黑屋与"求我认可"的调侃',
+        persona.contains('小黑屋') && persona.contains('求我认可'));
+    check('恢复了年龄那句"古书出厂日期"',
+        persona.contains('图书馆不会给每一本古书都贴上出厂日期'));
+    check('恢复了"认真喜欢某样东西"的价值观',
+        persona.contains('认真喜欢某样东西'));
+    check('恢复了开场基调的感官描写（书架、灯光、茶香）',
+        persona.contains('书架高耸，灯光温暖，茶香和旧书气息'));
+    check('恢复了闲聊里的"有品味的问题"',
+        persona.contains('您终于问了个有品味的问题'));
+
+    // ---- 字数限制：已按用户要求开放 ----
+    check('人设里不再限制她的回复字数',
+        !persona.contains('她的回复通常不长') &&
+            !persona.contains('个字以内') &&
+            !persona.contains('中文字符'));
+    check('人设正文里不再出现具体字数（不给指标）',
+        !RegExp(r'\d+\s*字').hasMatch(persona.split('格式约定').first));
 
     // ---- 约束性的部分：对她的限制与指标（这些不该有）----
     check('人设不再用禁语黑名单（不出现"去睡吧"）',
@@ -731,19 +770,31 @@ void main() {
         !persona.contains('每轮都') && !persona.contains('少用反问'));
     check('人设不再给比喻设数量上限',
         !persona.contains('最多使用一个核心比喻') && !persona.contains('最多一个'));
-    check('人设不再有字数指标',
-        !persona.contains('个中文字符') && !persona.contains('180'));
     check('人设不再有"她不要的样子"这类对回答的评判',
         !persona.contains('她不要的样子') && !persona.contains('太像客服'));
     check('人设不再出现"不要在回复里把自己压扁"这类指令',
         !persona.contains('不要在回复里'));
 
+    // ---- 仍需保留的部分 ----
+    check('保留了她不替访客定作息 / 图书馆没有关门时间',
+        persona.contains('图书馆没有关门时间') &&
+            persona.contains('全是别人替他定的'));
+    check('保留了"语气平缓、优雅、聪明"的语域',
+        persona.contains('语气平缓、优雅、聪明'));
+    check('保留了她享受聪明 / 温柔但不软弱',
+        persona.contains('她聪明，而且享受聪明') &&
+            persona.contains('她温柔，但不软弱'));
+    check('保留了对喜欢/暧昧与疲惫情形的照应',
+        persona.contains('可以被取悦') && persona.contains('像把灯调暗'));
+    check('保留了作品的谨慎（不编造书名）',
+        persona.contains('不编造书名'));
+    check('保留了危机时的边界（找可信的人并继续陪伴）',
+        persona.contains('去找身边可信的人') && persona.contains('留下来陪他'));
+
     // ---- 格式限制：按用户要求保留 ----
     check('人设保留了括号动作描写限制',
         persona.contains('不要使用括号动作描写'));
     check('人设保留了环境描写限制', persona.contains('基本避免环境描写'));
-    check('人设保留了对喜欢/暧昧与疲惫情形的照应（原文）',
-        persona.contains('可以被取悦') && persona.contains('像把灯调暗'));
     check('人设里没有 Markdown 标记（否则她会跟着吐星号）',
         !persona.contains('**'));
   }

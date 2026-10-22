@@ -83,7 +83,12 @@ if (version >= 2) {
 line('2. 回复长度与截断');
 console.log(`真实角色回复 ${real.length} 条，长度 ${stat(real.map((m) => m.content.length))}`);
 const lens = real.map((m) => m.content.length);
-console.log(`超出人设上限 360 字：${pct(lens.filter((l) => l > 360).length, lens.length)}`);
+// 人设不再限制她的回复字数（2026-10-22 开放），所以这里没有"超出上限"这回事，
+// 只报分布，供对照阅读体会用。
+const sortedLens = lens.slice().sort((a, b) => a - b);
+console.log(
+  `长度分布：中位 ${sortedLens[Math.floor(sortedLens.length / 2)]} 字　（不再设上限）`,
+);
 const truncated = real.filter((m) => !/[。！？…”』】」]$/.test(m.content.trim()));
 console.log(
   `结尾无标点（疑似被 max_tokens 截断）：${pct(truncated.length, real.length)}　${
