@@ -726,19 +726,28 @@ void main() {
     // ---- 语域：文学少女，但不过分繁复 ----
     check('她像在念一本读过很多遍的旧书',
         persona.contains('像在念一本自己读过很多遍的旧书'));
-    check('比喻从她见过的东西里长出来',
-        persona.contains('灯、雨、书页、茶、旧唱片、船、星'));
-    check('她不喜欢堆砌、宁可留白（把"过度花哨"写成本人的审美）',
-        persona.contains('她不喜欢堆砌') && persona.contains('她宁可留白'));
+    // 2026-10-23 定：**不写"她怎么用比喻"**。任何关于比喻机制的句子都会变成表演指令。
+    check('人设不写她怎么用比喻（只留例句）',
+        !persona.contains('她的比喻') && !persona.contains('比喻都'));
+    check('克制写成她的"讨厌"，而不是技法',
+        persona.contains('她讨厌把话说满的人'));
     check('她的词里没有办公室的味道（点名单字压缩式说法）',
         persona.contains('没有办公室的味道') &&
             persona.contains('我拆一下'));
-    check('她不结案、不说"所以您是……"',
+    check('她也不结案、不说"所以您是……"',
         persona.contains('她也不结案'));
-    check('恢复了她自己说过的梦幻例句',
-        persona.contains('每一集都像一篇温柔的水彩') &&
-            persona.contains('像咬了一口期待已久的点心') &&
-            persona.contains('有些火苗不是在阳光下才亮'));
+    check('例句是 A 组（克制·神谕感）',
+        persona.contains('更像潮水，退一点涨一点') &&
+            persona.contains('有些火苗不是在阳光下才亮') &&
+            persona.contains('读书翻页的时候不会惦记下一章'));
+    check('恢复了 6 月被删的气质参照（远坂凛/绚辻词/久石奏）',
+        persona.contains('远坂凛') &&
+            persona.contains('绚辻词') &&
+            persona.contains('久石奏'));
+    check('气质参照明确"只借气质，不模仿具体台词"',
+        persona.contains('只借气质，不模仿具体台词'));
+    // 注意：不要断言"人设里没有游戏词"——「通关奖励」是 6 月就在的原句，
+    // 用户明确说"这点先不动"（2026-10-23）。那句话属于她，不属于技法说明。
 
     // ---- 从 6 月完整备份恢复的、被压缩删掉的声音材料 ----
     check('恢复了"情绪表达与腹黑感"的示范台词',
