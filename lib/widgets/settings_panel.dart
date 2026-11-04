@@ -12,6 +12,8 @@ class SettingsPanel extends StatefulWidget {
     required this.onLayoutChanged,
     required this.showQuickOptions,
     required this.onQuickOptionsChanged,
+    required this.webSearch,
+    required this.onWebSearchChanged,
     required this.onSave,
     required this.onReset,
   });
@@ -23,6 +25,8 @@ class SettingsPanel extends StatefulWidget {
   final ValueChanged<String> onLayoutChanged;
   final bool showQuickOptions;
   final ValueChanged<bool> onQuickOptionsChanged;
+  final bool webSearch;
+  final ValueChanged<bool> onWebSearchChanged;
   final VoidCallback onSave;
   final VoidCallback onReset;
 
@@ -34,12 +38,14 @@ class _SettingsPanelState extends State<SettingsPanel> {
   bool _warned = false;
   late String _selectedLayout;
   late bool _showQuickOptions;
+  late bool _webSearch;
 
   @override
   void initState() {
     super.initState();
     _selectedLayout = widget.uiLayout;
     _showQuickOptions = widget.showQuickOptions;
+    _webSearch = widget.webSearch;
   }
 
   void _changeLayout(String layout) {
@@ -110,6 +116,35 @@ class _SettingsPanelState extends State<SettingsPanel> {
                           onChanged: (value) {
                             setState(() => _showQuickOptions = value);
                             widget.onQuickOptionsChanged(value);
+                          },
+                          activeTrackColor: kWhite,
+                          activeThumbColor: kBlack,
+                          inactiveTrackColor: const Color(0x66FFFFFF),
+                          inactiveThumbColor: kWhite,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('联网搜索',
+                                style:
+                                    TextStyle(color: kWhite, fontSize: 13)),
+                            SizedBox(height: 3),
+                            Text('发言前先查一次最新资料',
+                                style: TextStyle(
+                                    color: Color(0x88FFFFFF), fontSize: 11)),
+                          ],
+                        ),
+                        Switch(
+                          value: _webSearch,
+                          onChanged: (value) {
+                            setState(() => _webSearch = value);
+                            widget.onWebSearchChanged(value);
                           },
                           activeTrackColor: kWhite,
                           activeThumbColor: kBlack,

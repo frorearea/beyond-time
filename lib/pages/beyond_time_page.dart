@@ -398,6 +398,8 @@ class _BeyondTimePageState extends State<BeyondTimePage> {
             onLayoutChanged: _session.updateLayout,
             showQuickOptions: _session.showQuickOptions,
             onQuickOptionsChanged: _session.setShowQuickOptions,
+            webSearch: _session.webSearchEnabled,
+            onWebSearchChanged: _session.setWebSearch,
             onSave: () {
               _saveSettings();
               Navigator.of(context).pop();

@@ -53,6 +53,7 @@
 | 心声快速选项 | 38 组轮换，进度持久化；可折叠（默认关闭） | `lib/data/quick_options.dart`、`lib/widgets/quick_options.dart` |
 | 图书馆记忆 | LLM 自动提炼（上限 32 条），裁剪时**优先丢弃事实、永不丢书签** | `lib/services/memory_capture_service.dart`、`memory_book.dart` |
 | **记忆相关性检索 + 分栏配额** | 按当前话题挑记忆；事实 ≤9 条 / 书签 ≤3 条，书签不再挤占事实 | `lib/services/memory_selector.dart`、`lib/config.dart` |
+| **联网搜索（资料注入）** | 发言前先查一次 Search API，把结果作为"资料"注入；失败就当没搜到，不挡回复 | `lib/services/web_search*.dart`、`server.js` 的 `/api/search` |
 | **最优先原则：只由人设说话** | 运行时不注入任何行为约束；性格、语气、优雅、意象全归人设；只保留数据边界与纯格式限制 | `assets/prompts/ereta_persona.txt`、`conversation_context.dart` 的 `formatInstruction` |
 | **来访者原创留档** | 他自己的设定、名字与片段独立留存，并注入上下文；她不得替他改写 | `lib/models/creation_note.dart`、`creation_book.dart`、`creation_section.dart` |
 | **书架（书签）** | 选中她的句子收进独立书架，与「记忆」分栏展示 | `lib/widgets/shelf_panel.dart`、`bookmark_service.dart` |
@@ -136,6 +137,7 @@ lib/
                  chat_api* / sse_parser / reply_completer / conversation_context
                  memory_capture / memory_book / memory_selector
                  thread_book / creation_book / return_arc
+                 web_search*（Search API 客户端 + 纯函数解析/组装）
                  bookmark / archive_service* / local_store* / ambient_sound*
                  store_helper / error_helper / tarot_reading
   widgets/       18 个独立组件（dialogue_box / storybook_frame / shelf_panel /
@@ -247,6 +249,7 @@ node tool/scrub_archive.mjs <存档.json> --out clean.json
     但要重写流式解析，且失去 temperature 调校。**贵、慢、伤声音**
   - B. 保留 Chat Completions，客户端先调 Search API、把 `summary` 作为"资料"注入
     上下文，再让她用自己的声音回答。**改动小、声音不变、成本可控**（推荐）
+  - **2026-11-04 已按 B 实现**，开关在设置里，默认开启；细节见第四节"联网搜索"条
 
 ### 运行时行为
 
@@ -257,6 +260,18 @@ node tool/scrub_archive.mjs <存档.json> --out clean.json
   - **「图书馆刚整理过书架」走 `notice`**（2026-10-11）：它是这个空间发出的通知（网页重新加载过一次），不是艾蕾塔的台词。选 `notice` 而不是 `ambient`，是因为 `ambient` 会被当作"她说过的话"渲染成正常亮度，而这句话不该冒充她。回执**读取即清除**（`StoreHelper.takeJustTidied`），否则每次打开都会重放
 - **回归问候是"一次性"的，不留在历史里**（2026-10-04 确认保持这个设计）：`_applyReturnGreeting` 把它作为 `ambient` 插入，而 `_persistHistory()` 只写 `chat`，所以刷新之后就不在了（除非档位仍然成立，比如回来还没说话）。**2026-10-04 之前看起来"有记录"，是因为老版本把环境语当 `chat` 存进了 localStorage**——那正是被清洗掉的那 46 条。如果哪天想要"每次回来的问候都留个痕迹"，那需要给 `ambient` 单独开一条"界面可见、不写存档、不进上下文"的通道，不要图省事把它变成 `chat`（那会重新污染 80 轮上下文窗口，并影响她的称呼与口癖）
 - 环境语**页面同时至多一条**，且**不写入存档**
+- **联网搜索**（2026-11-04）：设置里的「联网搜索」默认**开启**。开启时，每次发言前
+  用来访者原话（≥6 字、截到 128 字）调一次 `POST /v1/tools/search`，把结果里
+  **`summary`（600–800 字，官方写明"适用于给模型阅读"）** 拼成一段资料注入上下文。
+  - **失败一律当没搜到**：8 秒超时、任何异常都返回 null，绝不会挡住回复
+  - 注入时会写明"可能有用、可能不相关、也可能过时；不要编造资料里没有的内容；
+    无关就当没看见，不要硬拐话题"——这是**数据边界**，不是对她说话方式的约束
+  - 塔罗这类带专门指令的回合不搜
+  - **Web 端一律走同源 `/api/search` 代理**，不直连：直连会被 CORS 拦且要等超时。
+    所以**联网只在有代理的部署上生效**（本地 `node server.js`、Docker、Worker）；
+    `github.io` 上没有代理，等于安静地不联网
+  - 三个服务端（`server.js` / `windows-server.js` / `sites/worker.js`）都实现了
+    `/api/search`，且**只允许转发到 `api.deepseek.com`**——否则就是一个开放代理
 - `max_tokens` 默认 **2400**（`kDefaultMaxTokens`）。**不能调小**：同时开启 thinking 时思维链会吃掉预算，520 曾导致 101 条回复里有 4 条被切断在句子中间；1000 又会偶尔被思维链整份吃光（见下一条）。提到 1600 不会让平均成本翻倍——旧值下失败一次本来就要花两次请求。2026-10-22 人设里取消了她回复的字数限制，正文因此需要更多余量，再提到 2400（**上限不是要求**：她写完就停，这个值只在"她正好写得长"时不把她切断）
 - **流为空是语义，不是文案**：`chat_api_*` 必须**原样返回**流里拿到的东西（可能是空串），**绝不许自己编一句"模型没有返回内容。"**。这个判断属于上层：
   - `ReplyCompleter` 在"一个字都没写出来但 `finish_reason == length`"时重试一次，用的是 `kEmptyReplyRetryInstruction`（**不是**"从中断处接着写"——根本没有中断处），并且**不把空串当成她的半截回复塞回请求**（`buildRetryMessages` 是纯函数，可零依赖单测）
@@ -361,7 +376,7 @@ node tool/scrub_archive.mjs <存档.json> --out clean.json
   - 备份对照：`ereta_persona_full_backup_20260607.txt`（最完整）、`..._compact_backup_20260608.txt`、
     以及每次大改前的 `ereta_persona_backup_<日期>_*.txt`
 - 测试：`tool/*_test.dart`（零依赖 `dart run`）+ `test/*_test.dart`（`flutter test`），新逻辑照此补充
-- **改完先跑全量**：`dart run tool/library_logic_test.dart` 等三套（均零依赖）+ `flutter test`（45 项）+ `flutter analyze`。**动了 `web/index.html` 还要加跑 `node tool/check_web_entry.mjs` 与 `node tool/web_entry_test.mjs`**。全部通过才算改完
+- **改完先跑全量**：`dart run tool/library_logic_test.dart`、`tool/web_search_test.dart` 等四套（均零依赖）+ `flutter test`（45 项）+ `flutter analyze`。**动了 `web/index.html` 还要加跑 `node tool/check_web_entry.mjs` 与 `node tool/web_entry_test.mjs`**。全部通过才算改完
 
 ### 指标闭环（改人设后怎么知道变好了）
 

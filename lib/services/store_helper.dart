@@ -49,6 +49,7 @@ class StoreHelper {
         'model': api.model,
         'uiLayout': 'classic',
         'showQuickOptions': 'false',
+        'webSearch': kWebSearchDefault ? 'true' : 'false',
       };
     }
     try {
@@ -59,6 +60,10 @@ class StoreHelper {
         'model': api.model,
         'uiLayout': data['uiLayout']?.toString() ?? 'classic',
         'showQuickOptions': data['showQuickOptions'] == true ? 'true' : 'false',
+        // 缺省视为开启（2026-11-04 定的默认值）。老设置文件里没有这个键。
+        'webSearch': data['webSearch'] == false
+            ? 'false'
+            : (kWebSearchDefault ? 'true' : 'false'),
       };
     } catch (_) {
       return {
@@ -67,6 +72,7 @@ class StoreHelper {
         'model': api.model,
         'uiLayout': 'classic',
         'showQuickOptions': 'false',
+        'webSearch': kWebSearchDefault ? 'true' : 'false',
       };
     }
   }
@@ -75,6 +81,7 @@ class StoreHelper {
     ApiSettings api, {
     String uiLayout = 'classic',
     bool showQuickOptions = false,
+    required bool webSearch,
   }) {
     _store.write(
       kSettingsKey,
@@ -84,6 +91,7 @@ class StoreHelper {
         'model': api.model,
         'uiLayout': uiLayout,
         'showQuickOptions': showQuickOptions,
+        'webSearch': webSearch,
       }),
     );
   }

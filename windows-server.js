@@ -31,6 +31,11 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "POST" && url.pathname === "/api/search") {
+      await handleSearch(request, response);
+      return;
+    }
+
     if (request.method !== "GET") {
       sendJson(response, 405, { error: "Method not allowed." });
       return;
@@ -211,4 +216,52 @@ function sendJson(response, statusCode, payload) {
     "Content-Type": "application/json; charset=utf-8",
   });
   response.end(JSON.stringify(payload));
+}
+
+// 网页搜索代理：只转发到 api.deepseek.com，避免变成开放代理。
+const DEEPSEEK_SEARCH_URL = "https://api.deepseek.com/v1/tools/search";
+
+async function handleSearch(request, response) {
+  const body = await readJson(request);
+  const apiKey = body.apiKey || process.env.DEEPSEEK_API_KEY || "";
+  const query = typeof body.query === "string" ? body.query.trim().slice(0, 128) : "";
+  const count = Math.min(50, Math.max(1, Number(body.count) || 10));
+
+  if (!apiKey) {
+    sendJson(response, 400, { error: "API Key is required." });
+    return;
+  }
+  if (!query) {
+    sendJson(response, 400, { error: "Query is required." });
+    return;
+  }
+
+  let searchUrl;
+  try {
+    searchUrl = new URL(body.searchUrl || DEEPSEEK_SEARCH_URL);
+    if (searchUrl.protocol !== "https:" || searchUrl.hostname !== "api.deepseek.com") {
+      throw new Error("host");
+    }
+  } catch (_) {
+    sendJson(response, 400, { error: "Search address is not allowed." });
+    return;
+  }
+
+  const upstream = await fetch(searchUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ query, count, need_content: false }),
+  });
+  const text = await upstream.text();
+  let payload;
+  try {
+    payload = JSON.parse(text);
+  } catch (_) {
+    payload = { error: text.slice(0, 500) };
+  }
+  sendJson(response, upstream.status, payload);
 }

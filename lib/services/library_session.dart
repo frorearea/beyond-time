@@ -26,6 +26,8 @@ import 'reply_completer.dart';
 import 'return_arc.dart';
 import 'store_helper.dart';
 import 'thread_book.dart';
+import 'web_search.dart';
+import 'web_search_service.dart';
 
 enum SendStatus { ok, missingApiKey, failed, busy, empty }
 
@@ -63,6 +65,7 @@ class LibrarySession extends ChangeNotifier {
     CreationBook creationBook = const CreationBook(),
     MemoryBook memoryBook = const MemoryBook(),
     ReturnArc returnArc = const ReturnArc(),
+    WebSearchService? webSearchService,
   })  : _storeHelper = storeHelper ?? StoreHelper.platform(),
         _chatApi = chatApi ?? ChatApiClient(),
         _conversationContext = conversationContext,
@@ -70,7 +73,9 @@ class LibrarySession extends ChangeNotifier {
         _threadBook = threadBook,
         _creationBook = creationBook,
         _memoryBook = memoryBook,
-        _returnArc = returnArc {
+        _returnArc = returnArc,
+        _webSearchService = webSearchService ??
+            WebSearchService(WebSearchClient()) {
     _memoryCaptureService = MemoryCaptureService(_chatApi);
     _replyCompleter = ReplyCompleter(_chatApi);
     _loadLocalData();
@@ -84,6 +89,7 @@ class LibrarySession extends ChangeNotifier {
   final CreationBook _creationBook;
   final MemoryBook _memoryBook;
   final ReturnArc _returnArc;
+  final WebSearchService _webSearchService;
   late final MemoryCaptureService _memoryCaptureService;
   late final ReplyCompleter _replyCompleter;
 
@@ -108,6 +114,7 @@ class LibrarySession extends ChangeNotifier {
   String _persona = kFallbackPersona;
   String _uiLayout = 'storybook';
   bool _showQuickOptions = false;
+  bool _webSearchEnabled = kWebSearchDefault;
   bool _isSending = false;
   int _quickOptionPoolIndex = 0;
   int _memoryCaptureCooldown = 0;
@@ -131,6 +138,7 @@ class LibrarySession extends ChangeNotifier {
   String get persona => _persona;
   String get uiLayout => _uiLayout;
   bool get showQuickOptions => _showQuickOptions;
+  bool get webSearchEnabled => _webSearchEnabled;
   bool get isSending => _isSending;
   int get quickOptionPoolIndex => _quickOptionPoolIndex;
   bool get isConfigured => _apiSettings.isConfigured;
@@ -200,6 +208,8 @@ class LibrarySession extends ChangeNotifier {
     _apiSettings = _storeHelper.loadApiSettings();
     _uiLayout = settings['uiLayout'] ?? 'storybook';
     _showQuickOptions = settings['showQuickOptions'] == 'true';
+    // 缺省视为开启（老设置文件里没有这个键）。
+    _webSearchEnabled = settings['webSearch'] != 'false';
     _quickOptionPoolIndex = _storeHelper.loadQuickOptionPoolIndex();
     _messages = _storeHelper.loadHistory() ?? _openingMessages;
     _memories = _storeHelper.loadLibraryMemory();
@@ -323,6 +333,7 @@ class LibrarySession extends ChangeNotifier {
 
     try {
       final result = await _requestReply(
+        userText: trimmed,
         extraSystemInstruction: extraSystemInstruction,
         maxTokens: maxTokens,
       );
@@ -358,9 +369,21 @@ class LibrarySession extends ChangeNotifier {
   }
 
   Future<ReplyResult> _requestReply({
+    required String userText,
     String? extraSystemInstruction,
     int maxTokens = kDefaultMaxTokens,
   }) async {
+    // 联网资料：在她开口之前先查一次。
+    // 塔罗这类带专门指令的回合不搜（"请为我进行一次占卜"搜不出有用的东西）。
+    String? searchContext;
+    if (_webSearchEnabled && extraSystemInstruction == null) {
+      searchContext = await _webSearchService.buildContext(
+        query: userText,
+        apiKey: _apiSettings.apiKey.trim(),
+        searchUrl: _apiSettings.resolvedSearchUrl,
+      );
+    }
+
     final payload = {
       'model': _apiSettings.resolvedModel,
       'messages': _conversationContext.buildMessages(
@@ -370,6 +393,7 @@ class LibrarySession extends ChangeNotifier {
         threads: _threads,
         creations: _creations,
         userProfile: _profile,
+        searchContext: searchContext,
         extraSystemInstruction: extraSystemInstruction,
       ),
       // 1.35 → 1.15（2026-10-22）。
@@ -543,11 +567,20 @@ class LibrarySession extends ChangeNotifier {
     _notify();
   }
 
+  /// 联网搜索开关。开启时，每次发言前会先用她的原文去 Search API 查一次资料；
+  /// 查到就作为"事实资料"注入上下文，查不到或失败就当没搜过。
+  void setWebSearch(bool value) {
+    _webSearchEnabled = value;
+    _persistSettings();
+    _notify();
+  }
+
   void _persistSettings() {
     _storeHelper.saveSettings(
       _apiSettings,
       uiLayout: _uiLayout,
       showQuickOptions: _showQuickOptions,
+      webSearch: _webSearchEnabled,
     );
   }
 

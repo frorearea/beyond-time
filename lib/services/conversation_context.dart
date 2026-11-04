@@ -47,6 +47,8 @@ class ConversationContext {
     List<OpenThread> threads = const [],
     List<CreationNote> creations = const [],
     UserProfile? userProfile,
+    /// 联网搜索到的资料（见 [WebSearchService.formatForContext]）。为空则不注入。
+    String? searchContext,
     String? extraSystemInstruction,
   }) {
     // 只有真实对话进入上下文。以前这里靠字符串嗅探剔除书签回执
@@ -115,6 +117,8 @@ class ConversationContext {
                   '你可以引用、可以顺着聊、可以挑剔，但绝不要替他改写或补全，也不要宣称那是你写的，'
                   '更不要把它记成你的收藏。若他提起其中一份，先问他想往哪儿走，再谈你的看法。',
         },
+      if (searchContext != null && searchContext.trim().isNotEmpty)
+        {'role': 'system', 'content': searchContext.trim()},
       {'role': 'system', 'content': formatInstruction},
       if (extraSystemInstruction != null &&
           extraSystemInstruction.trim().isNotEmpty)

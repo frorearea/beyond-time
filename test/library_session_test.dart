@@ -531,6 +531,33 @@ void main() {
     });
   });
 
+  group('联网搜索开关', () {
+    test('默认开启', () {
+      final s = buildSession();
+      expect(s.session.webSearchEnabled, isTrue);
+      s.session.dispose();
+    });
+
+    test('可以关掉，并且写进设置', () {
+      final s = buildSession();
+      s.session.setWebSearch(false);
+      expect(s.session.webSearchEnabled, isFalse);
+      expect(s.store.read(kSettingsKey), contains('"webSearch":false'));
+      s.session.dispose();
+    });
+
+    test('设置里存着关闭时，启动即关闭', () {
+      final s = buildSession(seed: {
+        kSettingsKey: jsonEncode({
+          'apiKey': 'sk-x',
+          'webSearch': false,
+        }),
+      });
+      expect(s.session.webSearchEnabled, isFalse);
+      s.session.dispose();
+    });
+  });
+
   group('心声与塔罗门槛', () {
     test('心声池会轮换', () {
       final s = buildSession();

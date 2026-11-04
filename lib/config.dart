@@ -15,6 +15,15 @@ const String kUserProfileKey = 'beyondTimeUserProfile';
 /// 读取方是 `StoreHelper.takeJustTidied()`。两边必须用同一个字符串。
 const String kJustTidiedKey = 'beyondTimeJustTidied';
 
+/// DeepSeek Search API（网页搜索）。默认由 [kDefaultApiUrl] 推导，见 ApiSettings。
+const String kDefaultSearchUrl = 'https://api.deepseek.com/v1/tools/search';
+
+/// 一次注入几条搜索结果。summary 每条 600–800 字，多了会挤掉她的记忆预算。
+const int kMaxSearchResults = 3;
+
+/// 联网搜索默认开启（2026-11-04 定的）。
+const bool kWebSearchDefault = true;
+
 const String kPersonaAsset = 'assets/prompts/ereta_persona.txt';
 const String kFallbackPersona = '角色：艾蕾塔 · 图书馆的魔女';
 
