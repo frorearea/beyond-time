@@ -1,7 +1,7 @@
 # 时间之外 · Beyond Time — 项目主文档
 
 > **本文件是项目唯一权威文档。** 每次修改代码前先读本文件；功能新增、删除、重命名、架构调整后必须同步更新本文件。
-> 最后更新：2026-10-23
+> 最后更新：2026-11-04
 
 ---
 
@@ -223,6 +223,31 @@ node tool/scrub_archive.mjs <存档.json> --out clean.json
 - 打包后 exe 的 `__dirname` 指向虚拟快照，**必须用 `path.dirname(process.execPath)`** 定位 web 目录
 - 换图标流程：替换 `assets/images/app-icon.png` → 用 `png-to-ico` 转 `app-icon.ico` → `npm run release`
 
+### DeepSeek API 的联网能力（2026-11 按官方文档核实）
+
+- **我们的链路是 Chat Completions，它不支持联网搜索。** 请求体里没有、也不能加
+  `tools` / `web_search`；`server.js` 还是显式白名单转发，会自动丢掉多余字段
+- **`web_search` 只在新版 Responses API（`POST /responses`）里**，且**只有
+  `deepseek-v4-pro` 支持**（`tools: [{"type": "web_search"}]`）。Responses API 的流式
+  事件格式与 Chat Completions 不同（终止事件是 `response.completed` 等，没有
+  `[DONE]`），要接它就得重写 `sse_parser`；而且官方写明**思考模式下 `temperature`
+  不生效**——这等于废掉 `1.15` 那套声音调校。**不建议为了联网去换它**
+- **有一条更合适的路：独立的 Search / Fetch API**
+  - `POST https://api.deepseek.com/v1/tools/search`，body：`query`（1–128 字）、
+    `count`（1–50，默认 10）、`ori_question`、`localization`、`need_content`
+  - 返回 `results[]`：`title` / `url` / `snippet`（100–200 字，给人看）/
+    `summary`（600–800 字，**给模型读**）/ `content` / `date` / `authority`（0–4）/
+    `rerank_score`（≥1.5 算优质）
+  - 另有 `POST /v1/tools/fetch` 抓正文
+- 官方文档里的模型名是 **`deepseek-flash`** 与 **`deepseek-v4-pro`**；本项目
+  `config.dart` 的默认值仍是 `deepseek-v4-flash`。**改模型名之前先确认线上还能用**
+  （目前能用，说明它被当作别名接受，或用户在设置里改过）
+- **通往"她能不能联网"的两条路**：
+  - A. 换 Responses API + `deepseek-v4-pro` + `web_search`：她能自己决定搜不搜，
+    但要重写流式解析，且失去 temperature 调校。**贵、慢、伤声音**
+  - B. 保留 Chat Completions，客户端先调 Search API、把 `summary` 作为"资料"注入
+    上下文，再让她用自己的声音回答。**改动小、声音不变、成本可控**（推荐）
+
 ### 运行时行为
 
 - API 配置存 localStorage（`beyondTimeFlutterSettings`）；`server.js` 本地代理 `/api/chat`
@@ -301,6 +326,18 @@ node tool/scrub_archive.mjs <存档.json> --out clean.json
 - 写回归测试时先确认它能**在修复前失败**。反例：测"发送后清空输入框"如果没配 API Key，旧代码会走 missingApiKey 分支顺手清空，测试就完全测不出这个 bug
 - 大字文件（>800 行）优先拆分到 `lib/widgets/` 或 `lib/services/`
 - 人设文件 `assets/prompts/ereta_persona.txt` 有备份版本，修改前先备份
+- **她先接住玩笑，再判断**（2026-11-04）。来访者的玩笑常常是"冷面"的——一整句没有一个
+  "哈哈"，只靠夸张（"喜欢这个角色，人生也完蛋了"）。她曾把这句做成一次风险分诊：
+  "是喜欢虚构所以现实没指望，还是只能靠虚构活着所以是坏兆头？" 来访者只能补一句
+  "其实是想聊这个角色"。现在人设写的顺序是：**认得那种一本正经把话说过头的说法 →
+  先跟着玩 → 玩过再轻轻碰一下**。顺序一换，语气就变了
+- **她不提时辰**（2026-11-04）：实测她仍在说「夜里了，睡吧」「该歇了」（全档 4 次），
+  与人设原来那句"图书馆没有关门时间"冲突。补了"她也不太看钟——夜里也好，天亮也好，
+  她不会用时间催人"
+- **边界只留能力，不留话术**（2026-11-04）：删掉"鼓励联系身边可信的人/当地紧急援助"
+  那套咨询话术，只留一句"她确定这个人此刻不安全时，会直接说，不绕"。这是个人项目，
+  不需要客服腔；但"她会护人"这层厚度保留
+
 - **不要写"她怎么用比喻"**（2026-10-23 定）。人设里凡是描述比喻机制的句子
   （"她的比喻都从她见过的东西里长出来：灯、雨……"、"一个念头配一个形状就够了"、
   "宁可留白"）都会被当成**表演指令**，她会去"做"那个说明。现在的写法是：

@@ -797,8 +797,21 @@ void main() {
         persona.contains('可以被取悦') && persona.contains('像把灯调暗'));
     check('保留了作品的谨慎（不编造书名）',
         persona.contains('不编造书名'));
-    check('保留了危机时的边界（找可信的人并继续陪伴）',
-        persona.contains('去找身边可信的人') && persona.contains('留下来陪他'));
+    // 2026-11-04 边界瘦身：去掉"联系可信的人/紧急援助"那套话术，只留"她确定不安全"的能力。
+    check('边界瘦身后仍保留"她确定不安全时会直接说"',
+        persona.contains('此刻不安全') && persona.contains('直接说，不绕'));
+    check('边界瘦身去掉了咨询话术', !persona.contains('身边可信的人'));
+
+    // 2026-11-04 笑：先接住玩笑，再判断底下有没有真的重量。
+    check('人设写明她听得懂冷面玩笑（不靠"哈哈"）',
+        persona.contains('他开玩笑的时候，她不会先担心') &&
+            persona.contains('哪怕他一个字都没加'));
+    check('人设写明先跟着玩、玩过再轻轻碰一下',
+        persona.contains('先跟着玩') && persona.contains('玩过了'));
+
+    // 2026-11-04 不催睡：她不太看钟。
+    check('人设写明她不会用时间催人',
+        persona.contains('她也不太看钟') && persona.contains('不会用时间催人'));
 
     // ---- 格式限制：按用户要求保留 ----
     check('人设保留了括号动作描写限制',
