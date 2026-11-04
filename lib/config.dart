@@ -1,5 +1,6 @@
 const String kDefaultApiUrl = 'https://api.deepseek.com/chat/completions';
-const String kDefaultModel = 'deepseek-v4-flash';
+// 2026-11-04 按官方文档改名：deepseek-v4-flash → deepseek-flash。
+const String kDefaultModel = 'deepseek-flash';
 const String kSettingsKey = 'beyondTimeFlutterSettings';
 const String kHistoryKey = 'beyondTimeFlutterHistory';
 const String kQuickCountKey = 'beyondTimeFlutterQuickChoiceCount';

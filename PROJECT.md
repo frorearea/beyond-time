@@ -241,9 +241,11 @@ node tool/scrub_archive.mjs <存档.json> --out clean.json
     `summary`（600–800 字，**给模型读**）/ `content` / `date` / `authority`（0–4）/
     `rerank_score`（≥1.5 算优质）
   - 另有 `POST /v1/tools/fetch` 抓正文
-- 官方文档里的模型名是 **`deepseek-flash`** 与 **`deepseek-v4-pro`**；本项目
-  `config.dart` 的默认值仍是 `deepseek-v4-flash`。**改模型名之前先确认线上还能用**
-  （目前能用，说明它被当作别名接受，或用户在设置里改过）
+- 官方文档里的模型名是 **`deepseek-flash`** 与 **`deepseek-v4-pro`**。本项目
+  2026-11-04 起默认用 **`deepseek-flash`**（不用 pro：pro 只在需要 `web_search`
+  工具时才有意义，我们走的是独立的 Search API）。
+  老设置文件里若存着 `deepseek-v4-flash`，`StoreHelper.loadApiSettings` 会**只针对
+  这一个确切的名字**做迁移；用户自己选的 `deepseek-chat` 等一律不动
 - **通往"她能不能联网"的两条路**：
   - A. 换 Responses API + `deepseek-v4-pro` + `web_search`：她能自己决定搜不搜，
     但要重写流式解析，且失去 temperature 调校。**贵、慢、伤声音**

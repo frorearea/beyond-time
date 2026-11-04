@@ -15,7 +15,9 @@ import '../lib/services/creation_book.dart';
 import '../lib/services/memory_book.dart';
 import '../lib/services/memory_capture_service.dart';
 import '../lib/services/memory_selector.dart';
+import '../lib/services/key_value_store.dart';
 import '../lib/services/return_arc.dart';
+import '../lib/services/store_helper.dart';
 import '../lib/services/thread_book.dart';
 
 int _failures = 0;
@@ -820,6 +822,24 @@ void main() {
     check('人设里没有 Markdown 标记（否则她会跟着吐星号）',
         !persona.contains('**'));
   }
+
+  // ------------------------------------------------------------ 模型名迁移
+  section('模型名迁移（2026-11 改名）');
+  final legacy = StoreHelper(InMemoryStore({
+    kSettingsKey: jsonEncode({'apiKey': 'sk-x', 'model': 'deepseek-v4-flash'}),
+  }));
+  check('旧的 deepseek-v4-flash 换成当前默认值',
+      legacy.loadApiSettings().model == kDefaultModel);
+  check('默认值就是 deepseek-flash', kDefaultModel == 'deepseek-flash');
+  final custom = StoreHelper(InMemoryStore({
+    kSettingsKey: jsonEncode({'apiKey': 'sk-x', 'model': 'deepseek-chat'}),
+  }));
+  check('用户自己选的其它模型不被改写',
+      custom.loadApiSettings().model == 'deepseek-chat');
+  final blank = StoreHelper(InMemoryStore({
+    kSettingsKey: jsonEncode({'apiKey': 'sk-x'}),
+  }));
+  check('没写模型时用默认值', blank.loadApiSettings().model == kDefaultModel);
 
   // ------------------------------------------------------------ 收尾
   print('');

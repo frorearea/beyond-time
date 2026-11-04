@@ -106,7 +106,7 @@ async function handleChat(request, response) {
   const body = await readJson(request);
   const apiUrl = body.apiUrl || "https://api.deepseek.com/chat/completions";
   const apiKey = body.apiKey || process.env.DEEPSEEK_API_KEY || "";
-  const model = body.model || "deepseek-chat";
+  const model = body.model || "deepseek-flash";
   const messages = Array.isArray(body.messages) ? body.messages : [];
 
   if (!apiKey) {

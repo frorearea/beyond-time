@@ -19,6 +19,13 @@ class StoreHelper {
 
   final KeyValueStore _store;
 
+  /// 改名前的模型名。读到就换成当前默认值。
+  ///
+  /// `deepseek-v4-flash` 是旧写法（2026-11 官方文档已改成 `deepseek-flash`）。
+  /// **只迁移这一个确切的名字**：用户自己选的其它模型（`deepseek-chat` 等）一律不动，
+  /// 否则就成了替用户改设置。
+  static const Set<String> _retiredModelNames = {'deepseek-v4-flash'};
+
   ApiSettings loadApiSettings() {
     final raw = _store.read(kSettingsKey);
     if (raw == null) return const ApiSettings();
@@ -29,13 +36,18 @@ class StoreHelper {
         apiUrl: data['apiUrl']?.toString().trim().isNotEmpty == true
             ? data['apiUrl'].toString()
             : kDefaultApiUrl,
-        model: data['model']?.toString().trim().isNotEmpty == true
-            ? data['model'].toString()
-            : kDefaultModel,
+        model: _resolveModel(data['model']?.toString()),
       );
     } catch (_) {
       return const ApiSettings();
     }
+  }
+
+  static String _resolveModel(String? raw) {
+    final stored = (raw ?? '').trim();
+    if (stored.isEmpty) return kDefaultModel;
+    if (_retiredModelNames.contains(stored)) return kDefaultModel;
+    return stored;
   }
 
   /// 带界面的设置读取。API 设置与界面偏好共用一个 key，所以一起解析。

@@ -42,7 +42,7 @@ async function handleChat(request) {
   const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
   const model = typeof body.model === "string" && body.model.trim()
     ? body.model.trim()
-    : "deepseek-chat";
+    : "deepseek-flash";
   const messages = Array.isArray(body.messages) ? body.messages : [];
 
   if (!apiKey) return json({ error: "API Key is required." }, 400);

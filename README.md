@@ -76,7 +76,7 @@ npm run build:windows-exe
 
 - **API Key**：DeepSeek 或任何兼容 OpenAI Chat Completions 的密钥
 - **API 地址**：默认 `https://api.deepseek.com/chat/completions`
-- **模型**：默认 `deepseek-v4-flash`
+- **模型**：默认 `deepseek-flash`
 
 设置、对话、记忆保存在浏览器 `localStorage`。部署到公网时建议改用服务端代理存储密钥。
 
