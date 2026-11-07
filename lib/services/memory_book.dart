@@ -7,31 +7,40 @@ import '../models/library_memory_item.dart';
 class MemoryBook {
   const MemoryBook();
 
-  /// 追加一条记忆并维持 [kMaxLibraryMemory] 上限。
+  /// 追加一条记忆，并让**两类各自**维持自己的上限。
   ///
-  /// 超出上限时优先丢弃最旧的"事实"记忆，**绝不丢书签**：书签是来访者亲手
-  /// 收进图书馆的东西，被自动淘汰会非常伤人。2026-09-12 的存档里 21 条记忆
-  /// 中有 14 条是书签——如果按简单的 FIFO 裁剪，这些人会很轻易地消失。
+  /// 书签（来访者亲手收的）与事实（她整理的）用同一个总上限是错误的：
+  /// 2026-11-07 的存档里 32 条记忆有 29 条是书签，事实只剩 3 条——
+  /// 于是每来一条新事实就淘汰一条旧事实，历史记忆被慢慢洗光。
+  ///
+  /// 现在各类封顶、淘汰各自最旧的一条，谁也挤不掉谁；书签仍然只是"最后才动"，
+  /// 但它不再占用事实的额度。
   List<LibraryMemoryItem> append(
     List<LibraryMemoryItem> memories,
     LibraryMemoryItem item,
   ) {
     final next = [...memories, item];
-    if (next.length <= kMaxLibraryMemory) return next;
+    final knowledge = next.where((m) => m.isKnowledge).toList();
+    final bookmarks = next.where((m) => m.isBookmark).toList();
+    if (knowledge.length <= kMaxKnowledgeMemory &&
+        bookmarks.length <= kMaxBookmarks) {
+      return next;
+    }
 
-    final overflow = next.length - kMaxLibraryMemory;
-    final dropped = <int>{};
-    // 第一轮：从最旧的事实记忆开始丢。
-    for (var i = 0; i < next.length && dropped.length < overflow; i++) {
-      if (next[i].isKnowledge) dropped.add(i);
+    final kept = <LibraryMemoryItem>{
+      ...knowledge,
+      ...bookmarks,
+    };
+    if (knowledge.length > kMaxKnowledgeMemory) {
+      kept.removeAll(knowledge.sublist(0, knowledge.length - kMaxKnowledgeMemory));
     }
-    // 第二轮：事实记忆不够丢，才动书签。
-    for (var i = 0; i < next.length && dropped.length < overflow; i++) {
-      if (!dropped.contains(i)) dropped.add(i);
+    if (bookmarks.length > kMaxBookmarks) {
+      kept.removeAll(bookmarks.sublist(0, bookmarks.length - kMaxBookmarks));
     }
+    // 保持原来的先后顺序。
     return [
-      for (var i = 0; i < next.length; i++)
-        if (!dropped.contains(i)) next[i],
+      for (final memory in next)
+        if (kept.contains(memory)) memory,
     ];
   }
 

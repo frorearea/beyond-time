@@ -255,26 +255,44 @@ void main() {
   check('模板里的 {topic} 不会漏出来', !settledLine.contains('{topic}'));
 
   // ------------------------------------------------------------ 记忆上限
-  section('记忆簿记（C2 保护书签）');
+  section('记忆簿记（两类各自封顶）');
   const memoryBook = MemoryBook();
-  final full = [
-    for (var i = 0; i < kMaxLibraryMemory - 1; i++) fact('事实$i'),
-    bookmark('她说过的一句很好的话'),
-  ];
-  final afterAppend = memoryBook.append(full, fact('新事实'));
-  check('总数不超过上限', afterAppend.length == kMaxLibraryMemory);
-  check('书签在裁剪中被保住',
-      afterAppend.any((m) => m.content == '她说过的一句很好的话'));
-  check('最旧的事实先被淘汰', !afterAppend.any((m) => m.content == '事实0'));
-  check('新记忆被保留', afterAppend.any((m) => m.content == '新事实'));
 
-  // 全部是书签时仍然要能收敛
-  final allBookmarks = [
-    for (var i = 0; i < kMaxLibraryMemory; i++) bookmark('书签$i'),
+  // 事实溢出：只淘汰最旧的事实
+  final manyFacts = [
+    for (var i = 0; i < kMaxKnowledgeMemory; i++) fact('事实$i'),
   ];
-  final bookmarksCapped = memoryBook.append(allBookmarks, bookmark('新书签'));
-  check('极端情况下也能维持上限',
-      bookmarksCapped.length == kMaxLibraryMemory);
+  final afterFact = memoryBook.append(manyFacts, fact('新事实'));
+  check('事实数不超过上限', afterFact.length == kMaxKnowledgeMemory);
+  check('最旧的事实先被淘汰', !afterFact.any((m) => m.content == '事实0'));
+  check('新事实被保留', afterFact.any((m) => m.content == '新事实'));
+
+  // 关键回归（2026-11-07 的 bug）：书签再多，也不许挤掉事实。
+  // 旧逻辑共用一个 32 的总上限，29 条书签 + 3 条事实 = 满额，
+  // 于是每来一条新事实就淘汰一条旧事实，历史记忆被慢慢洗光。
+  final bookmarkHeavy = [
+    for (var i = 0; i < kMaxBookmarks; i++) bookmark('书签$i'),
+    for (var i = 0; i < 5; i++) fact('旧事实$i'),
+  ];
+  final afterPush = memoryBook.append(bookmarkHeavy, fact('刚整理的事实'));
+  check('书签占满额度时事实照样保留',
+      afterPush.where((m) => m.isKnowledge).length == 6);
+  check('书签只淘汰最旧的一条',
+      afterPush.where((m) => m.isBookmark).length == kMaxBookmarks);
+  check('新事实真的在', afterPush.any((m) => m.content == '刚整理的事实'));
+
+  // 书签自己溢出时，只淘汰书签，不碰事实
+  final allBookmarks = [
+    for (var i = 0; i < kMaxBookmarks; i++) bookmark('书签$i'),
+    fact('一条事实'),
+  ];
+  final capped = memoryBook.append(allBookmarks, bookmark('新书签'));
+  check('书签自己的上限也收敛',
+      capped.where((m) => m.isBookmark).length == kMaxBookmarks);
+  check('事实在书签溢出时完好', capped.any((m) => m.content == '一条事实'));
+  check('新书签保留、最旧书签淘汰',
+      capped.any((m) => m.content == '新书签') &&
+          !capped.any((m) => m.content == '书签0'));
 
   // ------------------------------------------------------------ 记忆选择器
   section('记忆选择器（话题相关 + 书签配额）');

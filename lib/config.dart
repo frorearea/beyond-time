@@ -28,8 +28,14 @@ const bool kWebSearchDefault = true;
 const String kPersonaAsset = 'assets/prompts/ereta_persona.txt';
 const String kFallbackPersona = '角色：艾蕾塔 · 图书馆的魔女';
 
-/// 图书馆记忆总条数上限。
-const int kMaxLibraryMemory = 32;
+/// 记忆上限**按类分开**（2026-11-07 修）。
+///
+/// 以前共用一个 32 的总上限，淘汰规则是"先丢最旧的事实、绝不动书签"——
+/// 结果 29 条书签把事实挤到只剩 3 个位置：每来一条新事实就淘汰一条旧事实，
+/// 历史记忆被慢慢洗光，来访者看到的永远是"这一次对谈整理出来的东西"。
+/// 现在两类各自封顶，谁也挤不掉谁。
+const int kMaxKnowledgeMemory = 200;
+const int kMaxBookmarks = 200;
 
 /// 记忆整理模型单条记忆的字符上限（人设里写的也是 45，别只改一处）。
 const int kMaxMemoryContentLength = 45;
