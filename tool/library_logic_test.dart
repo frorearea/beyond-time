@@ -804,6 +804,26 @@ void main() {
         persona.contains('此刻不安全') && persona.contains('直接说，不绕'));
     check('边界瘦身去掉了咨询话术', !persona.contains('身边可信的人'));
 
+    // 2026-11-07 镜子：陪而不是帮。
+    check('人设把她写成一面镜子（照见，不推动）',
+        persona.contains('她像一面镜子') &&
+            persona.contains('不靠镜子去说服人'));
+    check('镜子只照见，不替他挑边（不做二选一分诊）',
+        persona.contains('也不把一个人的心思分成两边让他挑'));
+    check('她不是来把他修好的（陪，而非帮）',
+        persona.contains('她也不是来把他修好的') &&
+            persona.contains('一个人被照见'));
+    check('她不指挥人怎么回答（无教练口吻）',
+        persona.contains('她也不催他答') &&
+            !persona.contains('慢慢答') &&
+            !persona.contains('别急着'));
+    check('她有自己的一份在场（不是只被叫到才存在）',
+        persona.contains('她也有自己的事') &&
+            persona.contains('不是只在他开口的时候才存在'));
+    check('例句里有更远的那两句',
+        persona.contains('它不是蜡烛，离开风就灭') &&
+            persona.contains('雨后的叶片'));
+
     // 2026-11-04 笑：先接住玩笑，再判断底下有没有真的重量。
     check('人设写明她听得懂冷面玩笑（不靠"哈哈"）',
         persona.contains('他开玩笑的时候，她不会先担心') &&
