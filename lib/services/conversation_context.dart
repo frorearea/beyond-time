@@ -13,7 +13,15 @@ class ConversationContext {
   final MemorySelector memorySelector;
 
   /// 注入上下文的最大历史轮数。
-  static const int maxHistory = 80;
+  ///
+  /// 2026-11-09 从 80 收到 24。原因不是省 token，是**历史惯性**：
+  /// 80 轮里塞着几万字的她自己，而人设只有几千字——她其实在模仿自己。
+  /// 上一版"镜子"写进人设后，问句收尾 33%、二选一 18%、"别急着" 22 条，
+  /// 几乎没动，就是因为旧声音在上下文里的分量远大于人设。
+  ///
+  /// **只影响"送进模型"的窗口，不删任何记录**：存档、记忆、未决之事照旧全在
+  /// （`store_helper` 那条线完全没动），更早的细节由记忆与未决之事承载。
+  static const int maxHistory = 24;
 
   /// 只有格式限制，没有任何"说话方式"的约束。**这是刻意的，不要往回加。**
   ///
@@ -49,6 +57,8 @@ class ConversationContext {
     UserProfile? userProfile,
     /// 联网搜索到的资料（见 [WebSearchService.formatForContext]）。为空则不注入。
     String? searchContext,
+    /// 时间事实（见 [TimeContext.build]）。间隔太短时为空，不注入。
+    String? timeContext,
     String? extraSystemInstruction,
   }) {
     // 只有真实对话进入上下文。以前这里靠字符串嗅探剔除书签回执
@@ -117,6 +127,8 @@ class ConversationContext {
                   '你可以引用、可以顺着聊、可以挑剔，但绝不要替他改写或补全，也不要宣称那是你写的，'
                   '更不要把它记成你的收藏。若他提起其中一份，先问他想往哪儿走，再谈你的看法。',
         },
+      if (timeContext != null && timeContext.trim().isNotEmpty)
+        {'role': 'system', 'content': timeContext.trim()},
       if (searchContext != null && searchContext.trim().isNotEmpty)
         {'role': 'system', 'content': searchContext.trim()},
       {'role': 'system', 'content': formatInstruction},

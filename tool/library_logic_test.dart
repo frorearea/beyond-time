@@ -623,6 +623,61 @@ void main() {
         ),
       ]).contains('不该出现在摘要里的正文'));
 
+  // ------------------------------------------------------------ 注入块
+  section('注入的 system 块（联网 / 时间）');
+  final withSearch = const ConversationContext().buildMessages(
+    persona: '人设',
+    messages: const [ChatMessage(role: 'user', content: '最近出了什么新游戏')],
+    memories: const [],
+    searchContext: '以下是从网上刚查到的资料：\n- 某篇报道：摘要',
+  );
+  check('联网资料作为 system 注入',
+      withSearch.any((m) => m['content']!.contains('从网上刚查到的资料')));
+  check('没有资料时不注入空块',
+      !const ConversationContext()
+          .buildMessages(
+            persona: '人设',
+            messages: const [ChatMessage(role: 'user', content: '随便聊聊')],
+            memories: const [],
+            searchContext: null,
+          )
+          .any((m) => m['content']!.contains('从网上刚查到的资料')));
+
+  final withTime = const ConversationContext().buildMessages(
+    persona: '人设',
+    messages: const [ChatMessage(role: 'user', content: '我回来了')],
+    memories: const [],
+    timeContext: '时间事实：现在是 2026-11-09 21:32，周一。你们上一次说话是两天前。',
+  );
+  check('时间事实作为 system 注入',
+      withTime.any((m) => m['content']!.contains('你们上一次说话是两天前')));
+  check('没有时间事实时不注入',
+      !const ConversationContext()
+          .buildMessages(
+            persona: '人设',
+            messages: const [ChatMessage(role: 'user', content: '我回来了')],
+            memories: const [],
+            timeContext: null,
+          )
+          .any((m) => m['content']!.contains('时间事实')));
+
+  // ------------------------------------------------------------ 历史窗口
+  section('历史窗口（2026-11-09 收到 24 轮）');
+  check('窗口是 24', ConversationContext.maxHistory == 24);
+  final longHistory = [
+    for (var i = 0; i < 40; i++)
+      ChatMessage(role: i.isEven ? 'user' : 'assistant', content: '第$i条'),
+  ];
+  final builtLong = const ConversationContext().buildMessages(
+    persona: '人设',
+    messages: longHistory,
+    memories: const [],
+  );
+  final chatItems = builtLong.where((m) => m['role'] != 'system').toList();
+  check('只送进最近 24 条', chatItems.length == 24);
+  check('最早的那条没进上下文', !builtLong.any((m) => m['content'] == '第0条'));
+  check('最近的那条在上下文里', builtLong.any((m) => m['content'] == '第39条'));
+
   // ------------------------------------------------------------ 上下文过滤
   section('上下文组装');
   final context = const ConversationContext().buildMessages(
@@ -821,6 +876,17 @@ void main() {
     check('边界瘦身后仍保留"她确定不安全时会直接说"',
         persona.contains('此刻不安全') && persona.contains('直接说，不绕'));
     check('边界瘦身去掉了咨询话术', !persona.contains('身边可信的人'));
+
+    // 2026-11-09 诗意是"看"的方式，不是"说"的技巧。
+    check('人设把她写成先看见形状再说话的人',
+        persona.contains('她看东西的时候，先看见的是形状') &&
+            persona.contains('谈一本书，谈一场考试'));
+    check('诗意被写成感知，不是修辞',
+        persona.contains('这不是修辞') &&
+            persona.contains('没法把一件还没有形状的事说出口'));
+    check('例句覆盖"谈实际困难"这一类',
+        persona.contains('迷雾里最要命的，不是路难走') &&
+            persona.contains('车票决定您坐哪趟车'));
 
     // 2026-11-07 镜子：陪而不是帮。
     check('人设把她写成一面镜子（照见，不推动）',

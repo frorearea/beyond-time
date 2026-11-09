@@ -8,6 +8,7 @@ import 'package:beyond_time/models/creation_note.dart';
 import 'package:beyond_time/models/library_archive.dart';
 import 'package:beyond_time/models/library_memory_item.dart';
 import 'package:beyond_time/models/open_thread.dart';
+import 'package:beyond_time/services/chat_api.dart';
 import 'package:beyond_time/services/key_value_store.dart';
 import 'package:beyond_time/services/library_session.dart';
 import 'package:beyond_time/services/store_helper.dart';
@@ -32,6 +33,23 @@ List<dynamic> _history(KeyValueStore store) {
 List<String> _historyContents(KeyValueStore store) => _history(store)
     .map((item) => (item as Map<String, dynamic>)['content'].toString())
     .toList();
+
+class _CapturingChatApi implements ChatApiClient {
+  Map<String, dynamic>? lastPayload;
+
+  @override
+  Future<String> requestStreamingReply({
+    required Map<String, dynamic> payload,
+    required String apiKey,
+    required String apiUrl,
+    required void Function(String reply) onReply,
+    void Function(String reason)? onFinishReason,
+  }) async {
+    lastPayload = payload;
+    onReply('好。');
+    return '好。';
+  }
+}
 
 void main() {
   group('会话初始化', () {
@@ -528,6 +546,58 @@ void main() {
       s.session.addListener(() => notifications++);
       s.session.dispose();
       expect(notifications, 0);
+    });
+  });
+
+  group('上下文窗口与时间（2026-11-09）', () {
+    test('收窄到 24 轮只影响送进模型的部分，存档一条不少', () {
+      final history = [
+        for (var i = 0; i < 40; i++)
+          {'role': i.isEven ? 'user' : 'assistant', 'content': '第$i条'},
+      ];
+      final s = buildSession(seed: {
+        kHistoryKey: jsonEncode(history),
+      });
+      expect(s.session.messages.length, 40);
+      expect(s.session.messages.first.content, '第0条');
+      expect(s.session.messages.last.content, '第39条');
+      s.session.dispose();
+    });
+
+    test('隔很久再开口时，请求里带着时间事实，历史只送 24 条', () async {
+      final api = _CapturingChatApi();
+      final store = InMemoryStore({
+        kSettingsKey: jsonEncode({'apiKey': 'sk-test', 'webSearch': false}),
+        kHistoryKey: jsonEncode([
+          for (var i = 0; i < 40; i++)
+            {'role': i.isEven ? 'user' : 'assistant', 'content': '第$i条'},
+        ]),
+        kLastVisitKey:
+            DateTime.now().subtract(const Duration(days: 2)).toIso8601String(),
+      });
+      final session =
+          LibrarySession(storeHelper: StoreHelper(store), chatApi: api);
+
+      await session.send('我回来了', captureMemory: false);
+
+      final items = (api.lastPayload!['messages'] as List)
+          .cast<Map<String, dynamic>>();
+      final systems = items
+          .where((m) => m['role'] == 'system')
+          .map((m) => m['content'].toString())
+          .join('\n');
+      expect(systems, contains('时间事实'));
+      expect(systems, contains('隔了两天'));
+      expect(items.where((m) => m['role'] != 'system').length, 24);
+      // 存档本身一条不少：40 条历史 + 这轮的一问一答。
+      // （多出来的那条是回归问候，MessageKind.ambient，不进存档也不进上下文。）
+      final durable = session.messages
+          .where((m) => m.kind == MessageKind.chat)
+          .toList();
+      expect(durable.length, 42);
+      expect(durable.any((m) => m.content == '第0条'), isTrue);
+      expect(durable.any((m) => m.content == '第39条'), isTrue);
+      session.dispose();
     });
   });
 

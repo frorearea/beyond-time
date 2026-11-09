@@ -26,6 +26,7 @@ import 'reply_completer.dart';
 import 'return_arc.dart';
 import 'store_helper.dart';
 import 'thread_book.dart';
+import 'time_context.dart';
 import 'web_search.dart';
 import 'web_search_service.dart';
 
@@ -373,6 +374,14 @@ class LibrarySession extends ChangeNotifier {
     String? extraSystemInstruction,
     int maxTokens = kDefaultMaxTokens,
   }) async {
+    // 时间事实：隔了 4 小时以上才注入，避免每轮都提醒她时间。
+    // 之所以在**每轮请求时**现算，而不是启动时算一次：页面可能一直开着跨天，
+    // 那时根本没有"重新加载"这个动作，启动时算的那份会一直是旧的。
+    final timeContext = TimeContext.build(
+      now: nowProvider(),
+      lastTalk: DateTime.tryParse(_storeHelper.loadLastVisit() ?? ''),
+    );
+
     // 联网资料：在她开口之前先查一次。
     // 塔罗这类带专门指令的回合不搜（"请为我进行一次占卜"搜不出有用的东西）。
     String? searchContext;
@@ -394,6 +403,7 @@ class LibrarySession extends ChangeNotifier {
         creations: _creations,
         userProfile: _profile,
         searchContext: searchContext,
+        timeContext: timeContext,
         extraSystemInstruction: extraSystemInstruction,
       ),
       // 1.35 → 1.15（2026-10-22）。
@@ -402,8 +412,11 @@ class LibrarySession extends ChangeNotifier {
       // 的单字谓语，写完读起来不温柔。1.15 收一点出格，但仍属高温，不至于退回平铺直叙
       // （记忆整理那边 0.3 的产出就是"平铺直叙"长什么样，可以对照）。
       //
-      // 不要再往下压很多：这个值同时是她"声音"的来源，压到 1.0 以下会明显变干。
-      'temperature': 1.15,
+      // 2026-11-09 再降到 1.05：那天的 11 条回复里有两处语病
+      // （"雾里摸到一样硬东西""那番单子您去吧"），高温挑到了不通的搭配。
+      // 但要说清：温度是**流畅度**的旋钮，不是诗意的旋钮——降温只会让她更
+      // "正确"，不会让她更美。诗性从人设与例句去要。
+      'temperature': 1.05,
       'max_tokens': maxTokens,
       'stream': true,
       'stream_options': {'include_usage': false},
